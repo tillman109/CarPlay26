@@ -1,0 +1,101 @@
+name: Publish CarPlay26 to Sileo Repo
+
+on:
+  workflow_run:
+    workflows: ["Build CarPlay26"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  publish:
+    if: >-
+      ${{ github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.head_branch == 'main' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download built DEB
+        uses: actions/download-artifact@v4
+        with:
+          name: CarPlay26-deb
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: packages
+
+      - name: Checkout Sileo repository
+        uses: actions/checkout@v4
+        with:
+          repository: tillman109/repo
+          token: ${{ secrets.CARPLAY26_REPO_TOKEN }}
+          path: repo
+
+      - name: Publish DEB and keep latest 3 CarPlay26 versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p repo/debs
+          find packages -type f -name '*.deb' -exec cp {} repo/debs/ \;
+
+          cd repo
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Retain only the three newest CarPlay26 *versions*. This preserves
+          # all architectures for those versions and never touches other tweaks.
+          shopt -s nullglob
+          carplay_packages=(debs/com.tillman109.carplay26_*.deb)
+          if (( ${#carplay_packages[@]} == 0 )); then
+            echo "No CarPlay26 packages found; refusing to remove anything"
+            exit 1
+          fi
+
+          versions=()
+          for package in "${carplay_packages[@]}"; do
+            filename=${package##*/}
+            suffix=${filename#com.tillman109.carplay26_}
+            version=${suffix%_*.deb}
+            if [[ "$suffix" == "$version" || -z "$version" ]]; then
+              echo "Unexpected CarPlay26 filename: $filename"
+              exit 1
+            fi
+            versions+=("$version")
+          done
+          mapfile -t sorted_versions < <(printf '%s\n' "${versions[@]}" | LC_ALL=C sort -V -u)
+          # Bash negative array slices can be empty when fewer than 3 versions
+          # exist; clamp the start index so a new repo never loses every build.
+          first_retained=0
+          if (( ${#sorted_versions[@]} > 3 )); then
+            first_retained=$(( ${#sorted_versions[@]} - 3 ))
+          fi
+          keep_versions=("${sorted_versions[@]:first_retained}")
+          printf 'Keeping CarPlay26 versions: %s\n' "${keep_versions[*]}"
+
+          for package in "${carplay_packages[@]}"; do
+            filename=${package##*/}
+            suffix=${filename#com.tillman109.carplay26_}
+            version=${suffix%_*.deb}
+            keep=false
+            for retained in "${keep_versions[@]}"; do
+              if [[ "$version" == "$retained" ]]; then
+                keep=true
+                break
+              fi
+            done
+            if [[ "$keep" == false ]]; then
+              echo "Retiring older CarPlay26 package: $filename"
+              rm -- "$package"
+            fi
+          done
+
+          git add -A -- debs/
+
+          if git diff --cached --quiet; then
+            echo "Packages already published; retention is up to date"
+            exit 0
+          fi
+
+          git commit -m "Auto-publish CarPlay26 (retain latest 3 versions)"
+          git push origin HEAD:main

@@ -1,0 +1,499 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>title</key>
+	<string>Changelog</string>
+	<key>items</key>
+	<array>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>CarPlay26 release history</string>
+			<key>footerText</key>
+			<string>Entries are based on the build history and previous testing. “Experimental” describes a test, not a completed feature.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.58 — Suppress native pressed tab highlights</string>
+			<key>footerText</key>
+			<string>Fixes old blue/grey iOS 16 rectangular tab highlights appearing when holding Spotify navigation tabs. Only the stock non-interactive UITabBarButton highlight view is hidden and restored on disable; native touch handling, labels, Now Playing, early pill startup and independent Home Styling remain unchanged. Slightly refines the inner selection capsule. GitHub build and WinPlay press/release verification required.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.57 — Spotify pills without Now Playing dependency</string>
+			<key>footerText</key>
+			<string>Removes the requirement for Spotify's separate Now Playing button to exist before applying the four-tab navigation pill. Accepts the native tab layout when it initially fills the bar or reserves space for the later Now Playing control, retaining tab geometry checks and Spotify-only protection. Labels, selection, native actions, Home Styling, diagnostics, wallpapers, dock and Airaw unchanged. Build and WinPlay testing required.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.56 — Faster Spotify pill startup and centred labels</string>
+			<key>footerText</key>
+			<string>Requests confirmed Spotify foreground state immediately on the template-host main queue, with a short retry before the existing fallback requests. Centres native tab labels after UIKit button layout using a guard limited to Spotify's verified pill navigation. Preserves native tap areas, selected capsule, Now Playing, working Home Styling and live switches. Build and WinPlay testing required.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.55 — Spotify pill navigation experiment</string>
+			<key>footerText</key>
+			<string>Adds an independent off-by-default iOS 26-style native pill navigation switch. Verified v0.2.54 report shows four UITabBarButtons and a separate Now Playing button. Visually hides native icons, centers existing labels and draws selected capsule while retaining original tap handlers/positions; restores native subview properties on disable or foreground loss. Existing Home Styling and diagnostic capture unchanged. Requires build and WinPlay testing.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.54 — Spotify navigation diagnostics</string>
+			<key>footerText</key>
+			<string>Extends the working Spotify report with bounded read-only CPSNavigationBar and tab-control inspection: view geometry, selected/highlighted/enabled states, subview classes, backing layers and separate Now Playing controller state. No labels or music data are read. Existing v0.2.53 live Home Styling, playback, dock, wallpaper and Airaw remain untouched. Requires compilation and WinPlay confirmation.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.53 — Live Spotify styling switch</string>
+			<key>footerText</key>
+			<string>Spotify Home Styling now applies when changed in Settings without restarting CarPlay or respringing. Explicit preference get/set callbacks save the existing switch value and send ON/OFF Darwin notifications. The native CarPlay foreground-app observer remains active even if styling was off at launch, letting the template host restore or clear the existing artwork rows immediately. No layout, playback, dock, wallpaper, Airaw or diagnostic changes. Device verification required.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.52 — Clear Spotify Home panels</string>
+			<key>footerText</key>
+			<string>The v0.2.51 report proved native backgrounds and layers were changing correctly. The previous 12% dark tint over a light background simply reproduced stock panel grey. The opt-in Spotify Home Styling test now fully clears eligible four-artwork row backgrounds and restores their original colour and opaque flag when Spotify loses foreground status. Table and content backing transparency, controls, layout, playback and diagnostics remain unchanged. This does not add iOS 26 wallpaper blur. Build and WinPlay testing required.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.51 — Spotify Home backing diagnostics</string>
+			<key>footerText</key>
+			<string>Extends the existing read-only Spotify layout report to inspect active image-row backgroundConfiguration, background and selectedBackgroundView, layer colours and sublayers. No styling changes; keep Spotify Home Styling off when taking the next report. Compilation and device verification required.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.49 — Spotify Home background experiment</string>
+			<key>footerText</key>
+			<string>Adds opt-in Spotify Home Styling (Experimental) on the existing Spotify settings page. Uses native CarPlay dock activeBundleIdentifier state relayed to CarPlayTemplateUIHost by Darwin notification; only Spotify foreground image-row cells matching the observed four-artwork structure get a translucent background. The native colour is restored when Spotify loses focus. Does not change layout, buttons, playback, navigation, wallpapers, dock or Airaw. Off by default; restart CarPlay Services to apply. Requires build and WinPlay verification.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.50 — Spotify Home backing fix</string>
+			<key>footerText</key>
+			<string>Diagnostic proof confirmed v0.2.49 applies its transparent artwork-row tint, but opaque CPSTableView and its immediate UIView content canvas remain behind it. v0.2.50 conditionally clears these two confirmed backing surfaces only for Spotify foreground artwork rows and preserves their original colours and opacity for restoration. No media, navigation, wallpaper or layout modifications; WinPlay testing required.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.49 — Spotify Home styling experiment</string>
+			<key>footerText</key>
+			<string>Introduced opt-in Spotify-only image-row tint and foreground-app checks. On-device diagnostics confirmed the tint reached CPSImageRowCell; the effect was visually hidden by native opaque backing views. No layout or playback modifications.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.48 — Spotify settings and diagnostic capture</string>
+			<key>footerText</key>
+			<string>Adds a dedicated Spotify settings page and an opt-in, read-only CarPlayTemplateUIHost view inventory. Capture requests save view class names, view geometry and visual metadata in the template host process container. Song titles, playlists, contacts and message contents are not recorded. No Spotify appearance or playback changes are included. Device testing required.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.47 — Smaller wallpaper package</string>
+			<key>footerText</key>
+			<string>Reduces installed wallpaper storage by packaging six patterned colourways with 2048px full-size and 512px thumbnail JPEGs at high quality (92, 4:4:4), retaining all light/dark images and three solid-colour PNG choices. Native wallpaper picker, identifiers and loader behaviour are unchanged apart from format selection; the old PNG file extension remains a fallback. Build asserts all 36 resources. Device verification is still required.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.46 — App-aware launcher</string>
+			<key>footerText</key>
+			<string>When iOS 26 App Launcher Icon is enabled, show the outlined square only on the Home app grid, and the nine-square grid on the Dashboard and in foreground CarPlay apps. Reuse native DBAppDockViewController activeBundleIdentifier state in addition to the existing page geometry; preserve the animated fade, native Home button actions, dock, Airaw layout and all other styling. App transitions require WinPlay verification.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.45 — Native card tint and diagnostics</string>
+			<key>footerText</key>
+			<string>Restores visible Glass Dashboard Cards by placing a transparent borderless tint on the native card material rather than behind it or inside a second rounded panel. Diagnostic reports now try writable process-owned cache and temporary locations when the shared Documents path is unavailable. Notification badges, icon labels and the launcher are unchanged. Device verification required.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.44 — Card edges and badges</string>
+			<key>footerText</key>
+			<string>Uses the outer native dashboard card surface rather than adding an inset glass panel. Preserves the system card border and widget controls. Keeps icon rims visible with a small gap where notification badges overlap. Original labels, launcher transition, dock and wallpaper remain unchanged. Device testing required.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.43 — Launcher, badges and dashboard cards</string>
+			<key>footerText</key>
+			<string>Outlined-square home launcher blends into the Dashboard nine-square grid during navigation. Icon rim decoration now renders below native badge accessories or hides while a notification badge is present. The two lower dashboard cards get a quieter light-mode glass tint and border, without modifying widgets, map, text or actions. Light/dark app labels and Airaw grid unchanged. Device testing required.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.42 — Balanced labels and dashboard glass</string>
+			<key>footerText</key>
+			<string>Light-mode glass labels are lighter than v0.2.41 but retain more contrast than v0.2.40. Both native and fallback capsules keep measured widths and white text. Lower dashboard widget cards receive subtly rounded 20-point decorative corners, soft three-stop glass tint and quiet blue-grey borders; media control rims are toned down. Native map, widget layout, button actions, dark icon labels, dock and Airaw are untouched. On-device verification required.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.41 — Light label contrast</string>
+			<key>footerText</key>
+			<string>In light CarPlay appearance, app-label backgrounds use a darker smoky-grey translucent fill for clearer white text on bright wallpapers. Dark-mode labels, adaptive label sizing, dashboard, dock, and Airaw layout are unchanged. Device testing required.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.40 — Adaptive glass icon labels</string>
+			<key>footerText</key>
+			<string>Glass label backdrops use the measured native app title width with balanced padding. Preserves native text, icon position, spacing and Airaw grid layout. If a title or existing material mask is unavailable, retains stock geometry. Device testing required.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.39 — Softer iOS 26 surfaces</string>
+			<key>footerText</key>
+			<string>Darker icon-label backings with quieter edges and more subtle dashboard card tint/borders. Existing Glass Icon Labels and Glass Dashboard Cards switches still control these effects. Layout and native controls unchanged. [Device testing required]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.38 — Other Functions (experimental)</string>
+			<key>footerText</key>
+			<string>Optional startup splash, Apple Maps dark appearance, and native corner overlay tests. All default off; testing required. CarPlay Phone driving-related keypad restriction remains in place.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.37 — iOS 26 launcher icon</string>
+			<key>footerText</key>
+			<string>Add opt-in rounded-square outline to the native CarPlay home/app-launcher button. Keep original dock location, app shortcuts, layout, interactions and wallpapers. [Awaiting device test]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.36 — iOS 26 wallpapers + Settings</string>
+			<key>footerText</key>
+			<string>Replace all nine image wallpaper slots with six archived iOS 26 patterned designs and three solid-colour options. Light/dark variants, native picker/preview/home screen, plus dedicated Diagnostics and Changelog pages. [Testing required]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.35 — Home-screen wallpaper test</string>
+			<key>footerText</key>
+			<string>Confirmed green banner on the native CarPlay home screen, automatic reapplication after respring and correct disappearance when switching to a different wallpaper. [Confirmed]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.34 — Home-screen renderer trace</string>
+			<key>footerText</key>
+			<string>Confirmed CarPlayWallpaper creates the selected wallpaper controller and displays a 2048×2048 image in its own CarPlay window.  [Observed]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.33 — Picker and preview proof</string>
+			<key>footerText</key>
+			<string>Successfully overlaid a blue test banner on the top-left wallpaper thumbnail and preview; the actual home screen remained unchanged.  [Confirmed]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.32 — Image-source tracing</string>
+			<key>footerText</key>
+			<string>Identified the 11 stock wallpaper IDs, 512×512 picker thumbnails and 2048×2048 full images in CRSUIWallpaper.  [Confirmed]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.31 — Wallpaper model inspection</string>
+			<key>footerText</key>
+			<string>Inspected CRSUIWallpaper and preference methods, with synchronous, read-only model hooks.  [Diagnostic]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.30 — Delayed wallpaper checks</string>
+			<key>footerText</key>
+			<string>Added delayed native class detection and independent capture attempts.  [Diagnostic]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.29 — Direct wallpaper hooks</string>
+			<key>footerText</key>
+			<string>Tested native wallpaper controller hooks and gathered the first focused CarPlay class inventory.  [Diagnostic]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.28 — Automatic wallpaper capture</string>
+			<key>footerText</key>
+			<string>Added automatic native wallpaper screen capture attempts without relying on a shared setting.  [Diagnostic]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.27 — Grouped diagnostic switches</string>
+			<key>footerText</key>
+			<string>Consolidated diagnostic switches on the main page and added Capture Wallpaper Report.  [Settings and diagnostic]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.26 — Focused wallpaper probe</string>
+			<key>footerText</key>
+			<string>Narrowed inspection to native CarPlay wallpaper picker and display classes.  [Diagnostic]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.25 — Diagnostic write locations</string>
+			<key>footerText</key>
+			<string>Improved fallback output paths for wallpaper reports.  [Diagnostic]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.24 — Wallpaper handshake</string>
+			<key>footerText</key>
+			<string>Added a deterministic startup report and explicit requests to wallpaper processes.  [Diagnostic]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.23 — Wallpaper relay</string>
+			<key>footerText</key>
+			<string>Tested a cross-process diagnostic relay.  [Diagnostic]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.22 — Wallpaper startup probe</string>
+			<key>footerText</key>
+			<string>Added process startup diagnostics and sandbox-aware report paths.  [Diagnostic]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.21 — Native wallpaper research</string>
+			<key>footerText</key>
+			<string>Introduced read-only hooks to inspect the official CarPlay wallpaper picker.  [Diagnostic]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.20 — iOS 26-style dock finish</string>
+			<key>footerText</key>
+			<string>Added optional Liquid Glass-inspired reflections and highlights to the working dock.  [Confirmed]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.19 — Pinned dock app fix</string>
+			<key>footerText</key>
+			<string>Successfully pinned Messages in the right-hand native dock shortcut position, retaining other shortcuts.  [Confirmed]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.18 — Pinned dock investigation</string>
+			<key>footerText</key>
+			<string>Introduced an initial pinned shortcut experiment and supporting instrumentation.  [Experimental]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.17 — Dock shortcut analysis</string>
+			<key>footerText</key>
+			<string>Inspected the native dock buttons and recent-app selection methods.  [Diagnostic]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.16 — No-flash dock fix</string>
+			<key>footerText</key>
+			<string>Fixed white background flashes between CarPlay app pages by guarding the native dock backing.  [Confirmed]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.15 — Dock transition refinement</string>
+			<key>footerText</key>
+			<string>Continued testing the independent glass dock backing and transition behaviour.  [Experimental]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.14 — Independent dock material</string>
+			<key>footerText</key>
+			<string>Tested a distinct glass dock material while retaining native controls.  [Experimental]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.13 — Dock clipping and restart</string>
+			<key>footerText</key>
+			<string>Updated glass dock capsule clipping and added Restart CarPlay Services.  [Experimental]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.12 — Dock transition adjustments</string>
+			<key>footerText</key>
+			<string>Refined the glass dock transition behaviour.  [Experimental]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.11 — Dock backing transparency</string>
+			<key>footerText</key>
+			<string>Tested transparent backing changes to the native dock.  [Experimental]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.10 — Glass dock refinements</string>
+			<key>footerText</key>
+			<string>Iterated on the experimental native dock capsule and its rendering.  [Experimental]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.9 — Experimental glass dock</string>
+			<key>footerText</key>
+			<string>Introduced a native glass dock appearance experiment.  [Experimental]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.8 — Dock structure diagnostics</string>
+			<key>footerText</key>
+			<string>Expanded native dock and status bar inspection.  [Diagnostic]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.7 — Respring button</string>
+			<key>footerText</key>
+			<string>Added a working Respring action to CarPlay26 settings.  [Confirmed]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.6 — Dashboard updates</string>
+			<key>footerText</key>
+			<string>Improved immediate glass styling on dashboard cards and media controls.  [Confirmed]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.5 — Icon label fallback</string>
+			<key>footerText</key>
+			<string>Added glass label backgrounds for icon views without a usable native backdrop.  [Confirmed]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.4 — App icon transitions</string>
+			<key>footerText</key>
+			<string>Fixed glass styling appearing late when scrolling between CarPlay app pages.  [Confirmed]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.3 — Glass effects test</string>
+			<key>footerText</key>
+			<string>Added separate glass surface options and validated that the tweak changes WinPlay appearance.  [Confirmed]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.2 — Native material experiments</string>
+			<key>footerText</key>
+			<string>Tested overlay effects on existing CarPlay material views.  [Experimental]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.1 — Appearance and dock experiment</string>
+			<key>footerText</key>
+			<string>Added initial automatic appearance handling and experimental dock styling.  [Experimental]</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.0 — Initial RootHide preview</string>
+			<key>footerText</key>
+			<string>Introduced an independent experimental CarPlay26 tweak and icon appearance preview.  [Experimental]</string>
+		</dict>
+	</array>
+</dict>
+</plist>

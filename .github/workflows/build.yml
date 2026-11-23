@@ -1,0 +1,47 @@
+name: Build CarPlay26
+on:
+  push:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-15
+    env:
+      THEOS: ${{ github.workspace }}/theos-roothide
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: brew install ldid-procursus make dpkg
+      - name: Checkout RootHide Theos
+        uses: actions/checkout@v4
+        with:
+          repository: roothide/theos
+          path: theos-roothide
+          submodules: recursive
+      - name: Install SDK
+        run: "$THEOS/bin/install-sdk iPhoneOS16.5"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Prepare verified-resolution iOS 26 wallpaper artwork
+        run: |
+          python3 -m venv .cp26-venv
+          .cp26-venv/bin/python -m pip install --disable-pip-version-check Pillow==11.3.0
+          .cp26-venv/bin/python tools/prepare-wallpapers.py
+      - name: Build package
+        run: |
+          xcodebuild -version
+          gmake package FINALPACKAGE=1
+          ls -l packages
+          for package in packages/*.deb; do
+            dpkg-deb -I "$package"
+            dpkg-deb -c "$package"
+            count=$(dpkg-deb -c "$package" | grep -E 'CarPlay26Wallpapers/.+\.(jpg|png)$' | wc -l | tr -d '[:space:]')
+            echo "CarPlay26 wallpaper assets: $count (24 JPEG + 12 PNG expected)"
+            test "$count" -eq 36
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CarPlay26-deb
+          path: packages/*.deb
+          if-no-files-found: error

@@ -1,0 +1,26 @@
+{
+  "red": {
+    "light": "https://wallpapers.betaprofiles.com/wallpapers/2026/05/ios-26-carplay-red-light-5c6f9518.png",
+    "dark": "https://wallpapers.betaprofiles.com/wallpapers/2026/05/ios-26-carplay-red-dark-b0992fff.png"
+  },
+  "blue": {
+    "light": "https://wallpapers.betaprofiles.com/wallpapers/2026/05/ios-26-carplay-blue-light-d22f8157.png",
+    "dark": "https://wallpapers.betaprofiles.com/wallpapers/2026/05/ios-26-carplay-blue-dark-e58bee07.png"
+  },
+  "gray": {
+    "light": "https://wallpapers.betaprofiles.com/wallpapers/2026/05/ios-26-carplay-gray-light-59f93e05.png",
+    "dark": "https://wallpapers.betaprofiles.com/wallpapers/2026/05/ios-26-carplay-gray-dark-a29fc072.png"
+  },
+  "purple": {
+    "light": "https://wallpapers.betaprofiles.com/wallpapers/2026/05/ios-26-carplay-purple-light-816904dd.png",
+    "dark": "https://wallpapers.betaprofiles.com/wallpapers/2026/05/ios-26-carplay-purple-dark-36e9e8b0.png"
+  },
+  "green": {
+    "light": "https://wallpapers.betaprofiles.com/wallpapers/2026/05/ios-26-carplay-green-light-f103e2a9.png",
+    "dark": "https://wallpapers.betaprofiles.com/wallpapers/2026/05/ios-26-carplay-green-dark-9004c530.png"
+  },
+  "brown": {
+    "light": "https://wallpapers.betaprofiles.com/wallpapers/2026/05/ios-26-carplay-brown-light-377d6d71.png",
+    "dark": "https://wallpapers.betaprofiles.com/wallpapers/2026/05/ios-26-carplay-brown-dark-fb8f4dc9.png"
+  }
+}

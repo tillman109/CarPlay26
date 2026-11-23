@@ -1,0 +1,325 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>title</key>
+	<string>CarPlay26</string>
+	<key>items</key>
+	<array>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>CarPlay26</string>
+			<key>footerText</key>
+			<string>Restart CarPlay Services after changing a setting while parked. Respring is a fallback. Automatic vehicle appearance transitions do not require a restart.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Enable CarPlay26</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>Enabled</string>
+			<key>default</key>
+			<false/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Appearance</string>
+			<key>footerText</key>
+			<string>Automatic follows native CarPlay appearance. Manual modes change the glass tint only, not Apple’s text or map appearance.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSLinkListCell</string>
+			<key>label</key>
+			<string>Theme</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>AppearanceMode</string>
+			<key>default</key>
+			<string>auto</string>
+			<key>validValues</key>
+			<array>
+				<string>auto</string>
+				<string>light</string>
+				<string>dark</string>
+			</array>
+			<key>validTitles</key>
+			<array>
+				<string>Automatic — Follow Vehicle</string>
+				<string>Light Glass</string>
+				<string>Dark Glass</string>
+			</array>
+			<key>detail</key>
+			<string>PSListItemsController</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Dock</string>
+			<key>footerText</key>
+			<string>Glass Dock uses the stable no-flash capsule. iOS 26-Style Dock adds a clearer finish. App Launcher Icon shows an outlined square on the Home app grid and a nine-square grid on the Dashboard or inside an app, with a short crossfade. Native button location and touch behaviour are unchanged. Restart CarPlay Services to apply changes.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Glass Dock</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>GlassDockAppearance</string>
+			<key>default</key>
+			<false/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>iOS 26-Style Dock</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>DockLiquidStyle</string>
+			<key>default</key>
+			<false/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>iOS 26 App Launcher Icon</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>LauncherIcon26</string>
+			<key>default</key>
+			<false/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Glass surfaces</string>
+			<key>footerText</key>
+			<string>Glass Icon Labels now uses darker, less outlined backgrounds; Glass Dashboard Cards adds a borderless tint directly to the existing dashboard material. Icons, media controls, maps and the native layout stay unchanged.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Glass Icon Labels</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>GlassLabels</string>
+			<key>default</key>
+			<false/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Glass Dashboard Cards</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>GlassCards</string>
+			<key>default</key>
+			<false/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Glass App Icon Rims</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>GlassIcons</string>
+			<key>default</key>
+			<false/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Glass Media Controls</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>GlassControls</string>
+			<key>default</key>
+			<false/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Dock Shortcuts</string>
+			<key>footerText</key>
+			<string>Pin the last-used app slot without changing the navigation or media shortcuts. Restart CarPlay Services after changing the selection. Only native dock-eligible apps are supported.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Pin Dock App</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>PinDockApp</string>
+			<key>default</key>
+			<false/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSLinkListCell</string>
+			<key>label</key>
+			<string>Pinned App</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>PinnedDockApp</string>
+			<key>default</key>
+			<string>com.apple.MobileSMS</string>
+			<key>validValues</key>
+			<array>
+				<string>com.apple.MobileSMS</string>
+				<string>com.apple.mobilephone</string>
+			</array>
+			<key>validTitles</key>
+			<array>
+				<string>Messages</string>
+				<string>Phone</string>
+			</array>
+			<key>detail</key>
+			<string>PSListItemsController</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Other Functions — Experimental</string>
+			<key>footerText</key>
+			<string>Independent experimental options: startup splash artwork, CarPlay corner overlays, and Apple Maps dark appearance. Off by default. Restart services or reconnect after changing settings. Black corners controlled by the receiver may remain. CarPlay Phone keypad driving restrictions are not modified.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Remove Splash Screen</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>HideSplashScreen</string>
+			<key>default</key>
+			<false/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Dark Mode for Stock Maps</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>DarkStockMaps</string>
+			<key>default</key>
+			<false/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Remove CarPlay Black Corners</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>HideBlackCorners</string>
+			<key>default</key>
+			<false/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>App Appearance</string>
+			<key>footerText</key>
+			<string>Separate app-specific appearance options and reports. Spotify begins with a read-only diagnostic page; existing CarPlay visual settings are unchanged.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSLinkCell</string>
+			<key>label</key>
+			<string>Spotify</string>
+			<key>detail</key>
+			<string>CP26SpotifyController</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Tools</string>
+			<key>footerText</key>
+			<string>Advanced diagnostics are now on their own page</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSLinkCell</string>
+			<key>label</key>
+			<string>Diagnostics</string>
+			<key>detail</key>
+			<string>CP26DiagnosticsController</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Apply Changes</string>
+			<key>footerText</key>
+			<string>Restart only the CarPlay interface to apply settings while parked. Reconnect if needed. Disconnect CarPlay before a full respring.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>Restart CarPlay Services</string>
+			<key>action</key>
+			<string>restartCarPlay</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>Respring</string>
+			<key>action</key>
+			<string>respring</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>About</string>
+			<key>footerText</key>
+			<string>CarPlay26 0.2.48 — Spotify diagnostics and dedicated settings page</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSLinkCell</string>
+			<key>label</key>
+			<string>Changelog</string>
+			<key>detail</key>
+			<string>CP26ChangelogController</string>
+		</dict>
+	</array>
+</dict>
+</plist>

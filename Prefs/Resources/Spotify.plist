@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>title</key>
+	<string>Spotify</string>
+	<key>items</key>
+	<array>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Spotify Appearance</string>
+			<key>footerText</key>
+			<string>Spotify Home Styling independently clears supported Spotify artwork-row panels. Changes apply live while Spotify is foreground, and stock panel colours return when disabled.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Spotify Home Styling (Experimental)</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>SpotifyHomeStyling</string>
+			<key>get</key>
+			<string>readSpotifyHomeStyling:</string>
+			<key>set</key>
+			<string>setSpotifyHomeStyling:specifier:</string>
+			<key>default</key>
+			<false/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Spotify Navigation (Experimental)</string>
+			<key>footerText</key>
+			<string>Uses the native four CarPlay tab buttons to show text-only tabs inside a compact rounded pill with a moving selection capsule. The independent Now Playing button, native tab actions and touch targets remain unchanged. Off by default and independently reversible; does not require Home Styling.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>iOS 26-Style Pill Navigation</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>SpotifyPillNavigation</string>
+			<key>get</key>
+			<string>readSpotifyPillNavigation:</string>
+			<key>set</key>
+			<string>setSpotifyPillNavigation:specifier:</string>
+			<key>default</key>
+			<false/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Background Experiment</string>
+			<key>footerText</key>
+			<string>v0.2.52 and v0.2.53 confirmed clear panels and live switching. The native artwork, buttons, touch targets and layout are preserved. This setting does not add iOS 26 wallpaper blur.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Template Diagnostics</string>
+			<key>footerText</key>
+			<string>Read-only view hierarchy and layout measurements from CarPlayTemplateUIHost. No song names, messages, contacts, cover images or playlist contents are captured. The automatic report switch is off by default and takes effect when the template host next launches.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Capture on Host Launch</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>SpotifyDiagnostics</string>
+			<key>default</key>
+			<false/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>Capture Spotify Layout Report</string>
+			<key>action</key>
+			<string>captureSpotifyReport</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Report Location</string>
+			<key>footerText</key>
+			<string>The report is saved inside the CarPlayTemplateUIHost process cache or temporary directory, not in shared Documents. Capture while Spotify is open in WinPlay, then locate CarPlay26-Spotify-TemplateUIHost.txt using SSH. Capturing again replaces the previous report.</string>
+		</dict>
+	</array>
+</dict>
+</plist>

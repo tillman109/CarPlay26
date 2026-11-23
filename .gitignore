@@ -1,0 +1,49 @@
+# Theos and compiled package output
+.theos/
+packages/
+theos-roothide/
+*.deb
+*.dylib
+
+# Build-generated wallpaper resources (generated from WallpaperSources.json)
+layout/usr/lib/TweakInject/CarPlay26Wallpapers/
+
+# Python build tools
+.cp26-venv/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Credentials, provisioning and local configuration (never commit)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p8
+*.p12
+*.pfx
+*.mobileprovision
+id_rsa
+id_ed25519
+secrets/
+credentials/
+
+# Uploaded/decrypted app files and local distribution archives
+*.ipa
+*.zip
+
+# Local logs, crash reports, diagnostic dumps
+*.log
+*.ips
+*.crash
+*.dSYM/
+
+# Local editor and OS metadata
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.xcuserstate
+xcuserdata/

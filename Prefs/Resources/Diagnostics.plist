@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>title</key>
+	<string>Diagnostics</string>
+	<key>items</key>
+	<array>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Diagnostics</string>
+			<key>footerText</key>
+			<string>Read-only inspection switches and capture controls. RootHide may isolate the wallpaper apps from shared preferences; the capture action requests a report directly. No system wallpaper files are modified.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Enable Diagnostics</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>Diagnostics</string>
+			<key>default</key>
+			<false/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Inspect Dock (diagnostics only)</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>GlassDock</string>
+			<key>default</key>
+			<false/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Inspect Dock Shortcuts</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>InspectDockShortcuts</string>
+			<key>default</key>
+			<false/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Inspect Wallpaper Picker</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>InspectWallpaperPicker</string>
+			<key>default</key>
+			<false/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Wallpaper reports</string>
+			<key>footerText</key>
+			<string>Open the native wallpaper picker in WinPlay while parked before capturing. Reports may be saved in each app container.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>label</key>
+			<string>Capture Wallpaper Report</string>
+			<key>action</key>
+			<string>captureWallpaperReport</string>
+		</dict>
+	</array>
+</dict>
+</plist>
