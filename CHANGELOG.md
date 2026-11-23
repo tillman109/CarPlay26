@@ -1,3 +1,15 @@
+# CarPlay26 v0.2.59 — Spotify pill feedback and symmetric spacing
+
+## v0.2.59 — Bundled navigation improvements (single build)
+
+- Real v0.2.58 screenshot confirmed that suppressing UIKit's native tab highlight also removed visible touch-down feedback; add a *separate, temporary rounded blue-tinted press capsule* behind the native buttons, while retaining the existing persistent selected-tab capsule
+- Track the native `UIControl.highlighted` state from the already-hooked `UITabBarButton` state transitions; refresh pill visuals immediately on press and release without replacing touch handling, navigation targets or original tab button frames
+- Fix an actual first/last-tab spacing error: the 0.2.58 selection indicator reached both outer pill edges; use mathematically symmetric 4-point interior horizontal padding plus 4-point top/bottom insets for all four tabs, including the edge tabs
+- Reapply the selected/pressed tab's native text colour after UIKit selection and highlight changes, preventing a temporary dark/black label override during interaction
+- Keep stock highlight suppression, verified early pill appearance before Now Playing, independent Now Playing control, native 44-point hit targets, live Spotify Home Styling, reversibility, diagnostics, wallpapers, dock, Airaw, and all other settings unchanged
+- Conserves GitHub Actions usage by combining these related visual and interactive refinements into one staged package update; no workflow or Sileo retention-policy changes
+- **Requires GitHub compilation and device/WinPlay testing**: press and hold Home/Recents/Search/Library in light and dark modes, verify press feedback and equal capsule padding, switch among tabs, and disable to verify full native restoration
+
 # CarPlay26 v0.2.58 — Fix pressed tab highlights over Spotify pills
 
 ## v0.2.58 — Native tab press/selection highlight suppression

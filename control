@@ -1,8 +1,8 @@
 Package: com.tillman109.carplay26
 Name: CarPlay26
-Version: 0.2.58
+Version: 0.2.59
 Architecture: iphoneos-arm64e
-Description: CarPlay26 Spotify pill navigation with reversible native highlight suppression.
+Description: CarPlay26 Spotify pill with symmetric insets and touch feedback.
 Maintainer: CarPlay26 Project
 Author: CarPlay26 Project
 Section: Tweaks

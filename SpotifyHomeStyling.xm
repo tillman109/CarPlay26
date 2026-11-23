@@ -5,7 +5,7 @@
 #import <objc/runtime.h>
 #include <math.h>
 
-// CarPlay26 v0.2.58: Suppress stock pressed/selected tab highlights.
+// CarPlay26 v0.2.59: Add Spotify pill touch feedback and even insets.
 // The CarPlay shell identifies the foreground app via the already-observed
 // DBAppDockViewController.activeBundleIdentifier native getter. A Darwin
 // notification conveys only a boolean to CarPlayTemplateUIHost, avoiding
@@ -20,6 +20,8 @@ static BOOL CP26SpotifyHostNavEnabled = NO;     // Template host: explicit shell
 static BOOL CP26SpotifyNavMutating = NO;
 static NSHashTable<UITabBar *> *CP26SpotifyStyledNavBars;
 static const void *CP26SpotifyNavPillKey = &CP26SpotifyNavPillKey;
+// Both our persistent selection and temporary pressed indicators live inside
+// the non-interactive custom pill, never on top of native tab hit targets.
 static const void *CP26SpotifyNavPartSnapshotKey = &CP26SpotifyNavPartSnapshotKey;
 static NSHashTable<UIViewController *> *CP26SpotifyDockControllers;
 static NSHashTable<UIView *> *CP26SpotifyStyledCells;
@@ -467,6 +469,11 @@ static void CP26SpotifyUpdateNavBar(UITabBar *bar) {
         selection.userInteractionEnabled=NO;
         selection.layer.cornerRadius=14;
         [pill addSubview:selection];
+        UIView *pressed=[[UIView alloc] initWithFrame:CGRectZero];
+        pressed.userInteractionEnabled=NO;
+        pressed.layer.cornerRadius=14;
+        pressed.hidden=YES;
+        [pill addSubview:pressed];
         objc_setAssociatedObject(bar,CP26SpotifyNavPillKey,
             pill,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         if (!CP26SpotifyStyledNavBars)
@@ -482,7 +489,13 @@ static void CP26SpotifyUpdateNavBar(UITabBar *bar) {
     }
     CGFloat minX=CGRectGetMinX(buttons[0].frame),
             maxX=CGRectGetMaxX(buttons[3].frame);
-    CGRect pillFrame=CGRectMake(minX+4,4,maxX-minX-8,36);
+    // The v0.2.58 selection used to start at x=0 inside the outer pill
+    // for the first tab and finish at its right edge for the last tab.
+    // Use matching outer (4 pt) and inner (4 pt) side insets instead.
+    const CGFloat outerInset=4.0;
+    const CGFloat selectionInset=8.0;
+    CGRect pillFrame=CGRectMake(minX+outerInset,4,
+        maxX-minX-2*outerInset,36);
     if (!CGRectEqualToRect(pill.frame,pillFrame)) pill.frame=pillFrame;
     BOOL dark=bar.traitCollection.userInterfaceStyle==UIUserInterfaceStyleDark;
     pill.backgroundColor=dark?[UIColor colorWithWhite:0.15 alpha:0.68]:
@@ -497,9 +510,32 @@ static void CP26SpotifyUpdateNavBar(UITabBar *bar) {
         [UIColor colorWithWhite:0 alpha:0.12];
     if (!selection.hidden) {
         UIView *chosen=buttons[selected];
-        CGRect rect=CGRectMake(CGRectGetMinX(chosen.frame)-pillFrame.origin.x+4,
-            4,chosen.bounds.size.width-8,28);
+        CGRect rect=CGRectMake(CGRectGetMinX(chosen.frame)-pillFrame.origin.x+selectionInset,
+            4,chosen.bounds.size.width-2*selectionInset,28);
         if (!CGRectEqualToRect(selection.frame,rect)) selection.frame=rect;
+    }
+    // The native iOS 16 pressed rectangle is intentionally hidden, so draw a
+    // temporary, rounded touch indicator of our own. Unlike the persistent
+    // selected capsule it also appears when pressing a tab already selected.
+    // No target/action, gesture recognizer or control state is modified.
+    UIView *pressed=pill.subviews.count>1?pill.subviews[1]:nil;
+    NSUInteger pressedIndex=NSNotFound;
+    for (NSUInteger i=0;i<buttons.count;i++) {
+        UIView *button=buttons[i];
+        if ([button isKindOfClass:UIControl.class] &&
+            ((UIControl *)button).highlighted) {
+            pressedIndex=i;
+            break;
+        }
+    }
+    pressed.hidden=pressedIndex==NSNotFound;
+    if (!pressed.hidden) {
+        UIView *touched=buttons[pressedIndex];
+        CGRect rect=CGRectMake(CGRectGetMinX(touched.frame)-pillFrame.origin.x+selectionInset,
+            4,touched.bounds.size.width-2*selectionInset,28);
+        if (!CGRectEqualToRect(pressed.frame,rect)) pressed.frame=rect;
+        pressed.backgroundColor=[UIColor.systemBlueColor colorWithAlphaComponent:
+            dark?0.30:0.18];
     }
     for (NSUInteger i=0;i<buttons.count;i++) {
         UIView *button=buttons[i];
@@ -520,7 +556,10 @@ static void CP26SpotifyUpdateNavBar(UITabBar *bar) {
                 UIFont *pillFont=[UIFont systemFontOfSize:13 weight:UIFontWeightSemibold];
                 if (![label.font isEqual:pillFont]) label.font=pillFont;
                 CP26SpotifyCenterNavLabel(button,label);
-                label.textColor=(selected==i)?UIColor.systemBlueColor:
+                // Reinstate our text colour after UIKit's pressed/selected
+                // transitions, which can otherwise temporarily turn it black.
+                BOOL active=selected==i || pressedIndex==i;
+                label.textColor=active?UIColor.systemBlueColor:
                     (dark?UIColor.whiteColor:[UIColor colorWithWhite:0.22 alpha:1]);
             }
         }
@@ -635,11 +674,23 @@ static void CP26SpotifyHostAskShell(void) {
 }
 - (void)setHighlighted:(BOOL)highlighted {
     %orig;
-    CP26SpotifyHideNativeTabHighlights((UIView *)self);
+    UIView *button=(UIView *)self;
+    CP26SpotifyHideNativeTabHighlights(button);
+    UIView *parent=button.superview;
+    if ([parent isKindOfClass:UITabBar.class] &&
+        objc_getAssociatedObject(parent,CP26SpotifyNavPillKey) &&
+        !CP26SpotifyNavMutating)
+        CP26SpotifyUpdateNavBar((UITabBar *)parent);
 }
 - (void)setSelected:(BOOL)selected {
     %orig;
-    CP26SpotifyHideNativeTabHighlights((UIView *)self);
+    UIView *button=(UIView *)self;
+    CP26SpotifyHideNativeTabHighlights(button);
+    UIView *parent=button.superview;
+    if ([parent isKindOfClass:UITabBar.class] &&
+        objc_getAssociatedObject(parent,CP26SpotifyNavPillKey) &&
+        !CP26SpotifyNavMutating)
+        CP26SpotifyUpdateNavBar((UITabBar *)parent);
 }
 %end
 %end
