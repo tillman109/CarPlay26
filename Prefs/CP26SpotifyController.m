@@ -1,4 +1,4 @@
-#import <Preferences/PSListController.h>
+#import "CP26PreferencesUI.h"
 #import <Preferences/PSSpecifier.h>
 #import <UIKit/UIKit.h>
 #import <CoreFoundation/CoreFoundation.h>
@@ -6,7 +6,7 @@
 // Dedicated CarPlay26 Spotify page. The action is a one-shot Darwin request;
 // the template host reports completion by writing to its own sandbox.
 // Sending a notification is not evidence that a report was saved.
-@interface CP26SpotifyController : PSListController
+@interface CP26SpotifyController : CP26SettingsListController
 - (void)captureSpotifyReport;
 - (id)readSpotifyHomeStyling:(PSSpecifier *)specifier;
 - (void)setSpotifyHomeStyling:(id)value specifier:(PSSpecifier *)specifier;

@@ -1,3 +1,9 @@
+# CarPlay26 v0.2.63 — Settings and icon
+
+- Groups the iPhone settings into Display & Startup, Dock & Shortcuts, and Home Screen & Dashboard. Spotify and Diagnostics have their own pages
+- Adds an information button beside each switch name. Tapping it opens the description over the current page
+- Adds the CarPlay26 icon to the Settings list and to the main switch row
+
 # CarPlay26 v0.2.62 — Spotify Home layout
 
 - The Spotify Home Styling switch enables a two-column shortcut grid and six-column shelves. Tile spacing, typography and the continuous teal and blue background follow the supplied iOS 26 reference

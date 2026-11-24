@@ -10,9 +10,7 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>Diagnostics</string>
-			<key>footerText</key>
-			<string>Read-only inspection switches and capture controls. RootHide may isolate the wallpaper apps from shared preferences; the capture action requests a report directly. No system wallpaper files are modified.</string>
+			<string>CarPlay &amp; dock</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -25,18 +23,26 @@
 			<string>Diagnostics</string>
 			<key>default</key>
 			<false/>
+			<key>cellClass</key>
+			<string>CP26InfoSwitchCell</string>
+			<key>CP26Help</key>
+			<string>Writes a local report of the CarPlay interface and the glass effects applied. Restart CarPlay Services and connect to generate CarPlay26-diagnostics.txt</string>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSSwitchCell</string>
 			<key>label</key>
-			<string>Inspect Dock (diagnostics only)</string>
+			<string>Inspect Dock</string>
 			<key>defaults</key>
 			<string>com.tillman109.carplay26</string>
 			<key>key</key>
 			<string>GlassDock</string>
 			<key>default</key>
 			<false/>
+			<key>cellClass</key>
+			<string>CP26InfoSwitchCell</string>
+			<key>CP26Help</key>
+			<string>Captures the views and layers that make up the CarPlay dock. Turn on Enable Diagnostics too, then restart CarPlay Services to generate the dock report</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -49,6 +55,16 @@
 			<string>InspectDockShortcuts</string>
 			<key>default</key>
 			<false/>
+			<key>cellClass</key>
+			<string>CP26InfoSwitchCell</string>
+			<key>CP26Help</key>
+			<string>Records how CarPlay assigns apps to the dock’s shortcut slots. Restart CarPlay Services and connect to generate the shortcut report</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Wallpaper picker</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -61,14 +77,10 @@
 			<string>InspectWallpaperPicker</string>
 			<key>default</key>
 			<false/>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSGroupCell</string>
-			<key>label</key>
-			<string>Wallpaper reports</string>
-			<key>footerText</key>
-			<string>Open the native wallpaper picker in WinPlay while parked before capturing. Reports may be saved in each app container.</string>
+			<key>cellClass</key>
+			<string>CP26InfoSwitchCell</string>
+			<key>CP26Help</key>
+			<string>Requests reports from CarPlay Settings and the wallpaper picker after CarPlay starts. Open Settings → Wallpaper in CarPlay to inspect the picker. Tap Capture Wallpaper Report for a one-time capture</string>
 		</dict>
 		<dict>
 			<key>cell</key>

@@ -1,11 +1,11 @@
-#import <Preferences/PSListController.h>
+#import "CP26PreferencesUI.h"
 #import <Preferences/PSSpecifier.h>
 #import <UIKit/UIKit.h>
 #import <dlfcn.h>
 #import <CoreFoundation/CoreFoundation.h>
 
 // Resolve these private system APIs at runtime; no jailbreak binary paths.
-@interface CP26RootListController : PSListController
+@interface CP26RootListController : CP26SettingsListController
 - (void)respring;
 - (void)restartCarPlay;
 - (void)captureWallpaperReport;
@@ -149,9 +149,6 @@
 }
 @end
 
-// Native Preferences navigation. All three controllers live in the existing
-// CarPlay26Prefs bundle, so no additional binary or Makefile changes are needed.
-// PSLinkCell's `detail` values in Root.plist resolve these runtime class names.
 @interface CP26DiagnosticsController : CP26RootListController
 @end
 

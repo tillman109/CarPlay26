@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>title</key>
+	<string>Home Screen &amp; Dashboard</string>
+	<key>items</key>
+	<array>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Home Screen</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Glass Icon Labels</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>GlassLabels</string>
+			<key>default</key>
+			<false/>
+			<key>cellClass</key>
+			<string>CP26InfoSwitchCell</string>
+			<key>CP26Help</key>
+			<string>Adds a tinted glass background behind app names on the CarPlay Home Screen. The background follows the width of each label and adapts to your glass theme</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Glass App Icon Rims</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>GlassIcons</string>
+			<key>default</key>
+			<false/>
+			<key>cellClass</key>
+			<string>CP26InfoSwitchCell</string>
+			<key>CP26Help</key>
+			<string>Adds a thin glass rim around Home Screen app icons. When a notification badge appears, the rim leaves space for it</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Dashboard &amp; playback</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Glass Dashboard Cards</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>GlassCards</string>
+			<key>default</key>
+			<false/>
+			<key>cellClass</key>
+			<string>CP26InfoSwitchCell</string>
+			<key>CP26Help</key>
+			<string>Adds a soft tint and sheen to the lower CarPlay Dashboard cards, including Home and Now Playing</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Glass Media Controls</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>GlassControls</string>
+			<key>default</key>
+			<false/>
+			<key>cellClass</key>
+			<string>CP26InfoSwitchCell</string>
+			<key>CP26Help</key>
+			<string>Adds a subtle glass outline to supported CarPlay playback buttons, including the controls on the Now Playing card</string>
+		</dict>
+	</array>
+</dict>
+</plist>

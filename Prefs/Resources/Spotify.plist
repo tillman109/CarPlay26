@@ -10,15 +10,13 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>Spotify Appearance</string>
-			<key>footerText</key>
-			<string>Displays Spotify Home with compact two-column shortcuts, six artwork columns and a teal and blue backdrop. Titles and subtitles come from Spotify. Open a shelf once to fill in details supplied on its full list. Press and hold a shortcut to open its section.</string>
+			<string>Home &amp; navigation</string>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSSwitchCell</string>
 			<key>label</key>
-			<string>Spotify Home Styling (Experimental)</string>
+			<string>Spotify Home Styling</string>
 			<key>defaults</key>
 			<string>com.tillman109.carplay26</string>
 			<key>key</key>
@@ -29,14 +27,10 @@
 			<string>setSpotifyHomeStyling:specifier:</string>
 			<key>default</key>
 			<false/>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSGroupCell</string>
-			<key>label</key>
-			<string>Spotify Navigation (Experimental)</string>
-			<key>footerText</key>
-			<string>Uses the native four CarPlay tab buttons to show text-only tabs inside a compact rounded pill with a moving selection capsule. The independent Now Playing button, native tab actions and touch targets remain unchanged. Off by default and independently reversible; does not require Home Styling.</string>
+			<key>cellClass</key>
+			<string>CP26InfoSwitchCell</string>
+			<key>CP26Help</key>
+			<string>Gives Spotify Home two-column shortcuts, compact artwork shelves and a teal-to-blue background. Tap a shelf heading or hold a shortcut to open its full list. This setting applies while Spotify is open in CarPlay</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -53,22 +47,16 @@
 			<string>setSpotifyPillNavigation:specifier:</string>
 			<key>default</key>
 			<false/>
+			<key>cellClass</key>
+			<string>CP26InfoSwitchCell</string>
+			<key>CP26Help</key>
+			<string>Groups Home, Recents, Search and Library into a text-only tab bar. A selection pill moves when you switch tabs. This applies live and works independently of Spotify Home Styling</string>
 		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>Spotify Home controls</string>
-			<key>footerText</key>
-			<string>Tap a shortcut or cover to select it. Tap a shelf heading to open the full list. Home Styling and Pill Navigation have separate switches that apply live.</string>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSGroupCell</string>
-			<key>label</key>
-			<string>Template Diagnostics</string>
-			<key>footerText</key>
-			<string>Read-only view hierarchy and layout measurements from CarPlayTemplateUIHost. No song names, messages, contacts, cover images or playlist contents are captured. The automatic report switch is off by default and takes effect when the template host next launches.</string>
+			<string>Layout reports</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -81,6 +69,10 @@
 			<string>SpotifyDiagnostics</string>
 			<key>default</key>
 			<false/>
+			<key>cellClass</key>
+			<string>CP26InfoSwitchCell</string>
+			<key>CP26Help</key>
+			<string>Automatically captures a layout report the next time the CarPlay template host launches. The report records layout measurements and control counts. For a one-time capture with Spotify Home visible, tap Capture Spotify Layout Report</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -89,14 +81,6 @@
 			<string>Capture Spotify Layout Report</string>
 			<key>action</key>
 			<string>captureSpotifyReport</string>
-		</dict>
-		<dict>
-			<key>cell</key>
-			<string>PSGroupCell</string>
-			<key>label</key>
-			<string>Report Location</string>
-			<key>footerText</key>
-			<string>The report is saved inside the CarPlayTemplateUIHost process cache or temporary directory, not in shared Documents. Capture while Spotify is open in WinPlay, then locate CarPlay26-Spotify-TemplateUIHost.txt using SSH. Capturing again replaces the previous report.</string>
 		</dict>
 	</array>
 </dict>

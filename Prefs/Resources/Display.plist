@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>title</key>
+	<string>Display &amp; Startup</string>
+	<key>items</key>
+	<array>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Glass appearance</string>
+			<key>footerText</key>
+			<string>Automatic follows the vehicle’s light or dark appearance. The manual options set the glass tint</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSLinkListCell</string>
+			<key>label</key>
+			<string>Theme</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>AppearanceMode</string>
+			<key>default</key>
+			<string>auto</string>
+			<key>validValues</key>
+			<array>
+				<string>auto</string>
+				<string>light</string>
+				<string>dark</string>
+			</array>
+			<key>validTitles</key>
+			<array>
+				<string>Automatic — Follow Vehicle</string>
+				<string>Light Glass</string>
+				<string>Dark Glass</string>
+			</array>
+			<key>detail</key>
+			<string>PSListItemsController</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Startup &amp; screen edges</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Hide Startup Splash</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>HideSplashScreen</string>
+			<key>default</key>
+			<false/>
+			<key>cellClass</key>
+			<string>CP26InfoSwitchCell</string>
+			<key>CP26Help</key>
+			<string>Hides the CarPlay startup artwork. You may see a brief blank screen while the receiver finishes connecting. Reconnect CarPlay to see the change</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Hide Black Corners</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>HideBlackCorners</string>
+			<key>default</key>
+			<false/>
+			<key>cellClass</key>
+			<string>CP26InfoSwitchCell</string>
+			<key>CP26Help</key>
+			<string>Hides the black corner overlay drawn by iOS on the CarPlay display. Some receivers draw their own corners. Restart CarPlay Services to apply</string>
+		</dict>
+	</array>
+</dict>
+</plist>

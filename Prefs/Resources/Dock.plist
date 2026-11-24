@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>title</key>
+	<string>Dock &amp; Shortcuts</string>
+	<key>items</key>
+	<array>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Appearance</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Glass Dock</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>GlassDockAppearance</string>
+			<key>default</key>
+			<false/>
+			<key>cellClass</key>
+			<string>CP26InfoSwitchCell</string>
+			<key>CP26Help</key>
+			<string>Gives the CarPlay dock a rounded glass background around the clock, app shortcuts and status icons. Restart CarPlay Services to apply</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>iOS 26-Style Dock</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>DockLiquidStyle</string>
+			<key>default</key>
+			<false/>
+			<key>cellClass</key>
+			<string>CP26InfoSwitchCell</string>
+			<key>CP26Help</key>
+			<string>Adds a clearer tint, a highlight and a fine rim to the glass dock. Turn on Glass Dock too, then restart CarPlay Services</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>App launcher</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>iOS 26 App Launcher Icon</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>LauncherIcon26</string>
+			<key>default</key>
+			<false/>
+			<key>cellClass</key>
+			<string>CP26InfoSwitchCell</string>
+			<key>CP26Help</key>
+			<string>Changes the dock’s launcher icon to an outlined square on the app grid and a nine-square grid on the Dashboard or inside an app. The icons crossfade as you move between screens</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Pinned shortcut</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Pin Dock App</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>PinDockApp</string>
+			<key>default</key>
+			<false/>
+			<key>cellClass</key>
+			<string>CP26InfoSwitchCell</string>
+			<key>CP26Help</key>
+			<string>Keeps Messages or Phone in the dock’s last-used app slot. Choose which one under Pinned App, then restart CarPlay Services</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSLinkListCell</string>
+			<key>label</key>
+			<string>Pinned App</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>PinnedDockApp</string>
+			<key>default</key>
+			<string>com.apple.MobileSMS</string>
+			<key>validValues</key>
+			<array>
+				<string>com.apple.MobileSMS</string>
+				<string>com.apple.mobilephone</string>
+			</array>
+			<key>validTitles</key>
+			<array>
+				<string>Messages</string>
+				<string>Phone</string>
+			</array>
+			<key>detail</key>
+			<string>PSListItemsController</string>
+		</dict>
+	</array>
+</dict>
+</plist>

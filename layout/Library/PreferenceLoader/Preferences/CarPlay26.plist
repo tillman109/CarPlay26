@@ -14,6 +14,8 @@
 		<true/>
 		<key>label</key>
 		<string>CarPlay26</string>
+		<key>icon</key>
+		<string>CarPlay26Icon.png</string>
 	</dict>
 </dict>
 </plist>
