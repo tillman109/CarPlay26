@@ -1,3 +1,16 @@
+# CarPlay26 v0.2.61 — Spotify Home and dashboard glass finishing
+
+## v0.2.61 — Bundled visual treatment of two already-supported surfaces
+
+- **Spotify Home:** when the existing Spotify Home Styling switch is enabled and Spotify is foreground, soften the four-artwork CPSImageRowCell backing with a translucent three-stop glass-like glaze and very subtle edge highlight rather than the prior completely flat transparent surface. The native artwork, list headings, scroll handling, selection controls and navigation are unchanged
+- Keep the known opaque CPSTableView and content canvas clear so the new row finish remains translucent; scope styling to the already-validated Spotify CarPlay four-artwork rows and remove our glaze when Home Styling is disabled
+- **Dashboard:** add a restrained translucent directional sheen over the *existing native MTMaterialView* inside only the two verified lower DBWidgetView cards, using the current Glass Dashboard Cards preference. No extra card, offset, content overlay, map change or hit-test changes
+- Keep the established dashboard gradient, dock, launcher, media controls, native widgets and app-grid geometry; do not attempt iOS 26 widgets or Live Activities on the iOS 16 host
+- Keep the v0.2.60 animated Spotify selection capsule, native tab actions, Now Playing, rapid switching, Reduce Motion handling and independent Home Styling/Pill Navigation controls unchanged
+- This is an **iOS 26-inspired cosmetic approximation**, not Apple's private iOS 26 Liquid Glass implementation. The existing switches allow reversing each family of changes; dashboard toggles may require a CarPlay restart as previously
+- Retain public-build-safe wallpaper packaging and existing Sileo publication/retention workflows without modification
+- **Validation required:** GitHub compile and WinPlay dark/light screenshots for Spotify Home with Home Styling on/off, Dashboard Glass Cards on/off, and checks of Maps, Now Playing and Spotify tab interactions
+
 # CarPlay26 v0.2.60 — Animated Spotify pill tab selection
 
 ## v0.2.60 — Smooth, interruptible native-tab selection capsule

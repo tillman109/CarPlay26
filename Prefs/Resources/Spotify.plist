@@ -12,7 +12,7 @@
 			<key>label</key>
 			<string>Spotify Appearance</string>
 			<key>footerText</key>
-			<string>Spotify Home Styling independently clears supported Spotify artwork-row panels. Changes apply live while Spotify is foreground, and stock panel colours return when disabled.</string>
+			<string>Spotify Home Styling clears the stock grey backing and adds a soft translucent finish to supported four-artwork Home rows. Changes apply live while Spotify is foreground; original panels return when disabled. Independent of Pill Navigation.</string>
 		</dict>
 		<dict>
 			<key>cell</key>

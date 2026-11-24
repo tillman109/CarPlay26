@@ -5,7 +5,7 @@
 #import <objc/runtime.h>
 #include <math.h>
 
-// CarPlay26 v0.2.60: Animate Spotify pill selection changes, preserving native tabs.
+// CarPlay26 v0.2.61: Native Spotify Home glass rows + existing animated pill navigation.
 // The CarPlay shell identifies the foreground app via the already-observed
 // DBAppDockViewController.activeBundleIdentifier native getter. A Darwin
 // notification conveys only a boolean to CarPlayTemplateUIHost, avoiding
@@ -31,6 +31,7 @@ static NSHashTable<UIView *> *CP26SpotifyStyledCells;
 static NSHashTable<UIView *> *CP26SpotifyStyledBackings;
 static const void *CP26SpotifyOriginalColorKey = &CP26SpotifyOriginalColorKey;
 static const void *CP26SpotifyOriginalOpaqueKey = &CP26SpotifyOriginalOpaqueKey;
+static const void *CP26SpotifyGlassRowLayerKey = &CP26SpotifyGlassRowLayerKey;
 static const void *CP26SpotifyBackdropSnapshotKey = &CP26SpotifyBackdropSnapshotKey;
 static BOOL CP26SpotifyLastStateKnown = NO;
 static BOOL CP26SpotifyLastState = NO;
@@ -255,9 +256,54 @@ static void CP26SpotifyStyleArtworkBackings(UIView *cell) {
     CP26SpotifyApplyBackdrop(table);
 }
 
+// Only the already-validated four-artwork CPSImageRowCell receives a soft
+// decorative backing. It is behind native labels/artwork and has no hit testing.
+// This is a static glass-like tint, not the iOS 26 private Liquid Glass material.
+static void CP26SpotifyPolishArtworkRow(UIView *cell) {
+    if (!cell || !NSThread.isMainThread || !cell.window) return;
+    CAGradientLayer *glaze = objc_getAssociatedObject(cell, CP26SpotifyGlassRowLayerKey);
+    if (!glaze) {
+        glaze = [CAGradientLayer layer];
+        glaze.name = @"CarPlay26.SpotifyHomeGlaze";
+        glaze.masksToBounds = YES;
+        objc_setAssociatedObject(cell, CP26SpotifyGlassRowLayerKey,
+            glaze, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    if (glaze.superlayer != cell.layer) {
+        [glaze removeFromSuperlayer];
+        [cell.layer insertSublayer:glaze atIndex:0];
+    }
+    glaze.frame = CGRectInset(cell.bounds, 2.0, 2.0);
+    // Keep the stock cell silhouette when UIKit provides a corner radius;
+    // otherwise use restrained rounded corners for this identified row only.
+    CGFloat nativeRadius = cell.layer.cornerRadius;
+    glaze.cornerRadius = nativeRadius > 0 ? MAX(0.0,nativeRadius-2.0) : 15.0;
+    BOOL dark = cell.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
+    UIColor *top = dark ? [UIColor colorWithWhite:1 alpha:0.11] :
+        [UIColor colorWithWhite:1 alpha:0.35];
+    UIColor *middle = dark ? [UIColor colorWithWhite:1 alpha:0.055] :
+        [UIColor colorWithRed:.85 green:.94 blue:1 alpha:0.16];
+    UIColor *bottom = dark ? [UIColor colorWithWhite:1 alpha:0.025] :
+        [UIColor colorWithWhite:1 alpha:0.07];
+    glaze.colors = @[(id)top.CGColor,(id)middle.CGColor,(id)bottom.CGColor];
+    glaze.locations = @[@0.0,@0.42,@1.0];
+    glaze.startPoint = CGPointMake(0.08,0.0);
+    glaze.endPoint = CGPointMake(0.85,1.0);
+    glaze.borderColor = [UIColor colorWithWhite:1
+        alpha:dark ? 0.11 : 0.31].CGColor;
+    glaze.borderWidth = 0.45;
+    [CATransaction commit];
+}
+
 static void CP26SpotifyRestoreCell(UIView *cell) {
     id saved = objc_getAssociatedObject(cell, CP26SpotifyOriginalColorKey);
     if (!saved) return;
+    CAGradientLayer *glaze = objc_getAssociatedObject(cell, CP26SpotifyGlassRowLayerKey);
+    [glaze removeFromSuperlayer];
+    objc_setAssociatedObject(cell, CP26SpotifyGlassRowLayerKey,
+        nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     UIColor *original = saved == [NSNull null] ? nil : (UIColor *)saved;
     if (cell.backgroundColor != original &&
         ![cell.backgroundColor isEqual:original]) cell.backgroundColor = original;
@@ -303,6 +349,7 @@ static void CP26SpotifyUpdateCell(UIView *cell) {
     // Preserve and restore the native opaque flag on deactivation.
     if (cell.opaque) cell.opaque = NO;
     CP26SpotifyStyleArtworkBackings(cell);
+    CP26SpotifyPolishArtworkRow(cell);
 }
 
 
