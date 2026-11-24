@@ -1,7 +1,21 @@
+# CarPlay26 v0.2.60 — Animated Spotify pill tab selection
+
+## v0.2.60 — Smooth, interruptible native-tab selection capsule
+
+- Animate the existing rounded selected-tab indicator over 0.26 seconds with an ease-in/out transition whenever Spotify's four native tabs change selection
+- Support rapid taps with `UIViewAnimationOptionBeginFromCurrentState`, allowing a new selection to redirect the ongoing movement instead of visibly snapping
+- Do not animate when the pill first appears, when Now Playing initializes, when the tab bar changes geometry, or when the existing selection is redrawn during UIKit layout
+- Respect the iOS Reduce Motion accessibility setting by moving immediately without animation
+- Cancel indicator animations and reset per-bar selection history on disable/foreground loss, preserving reversible stock tab presentation
+- Preserve the v0.2.59 balanced insets, pressed-tab feedback, active label styling, four original native button actions, independent Now Playing, Home Styling, dock, wallpaper build restrictions, and Sileo publishing configuration
+- **Validation required**: build through the public repository and test Home → Library, Library → Search, rapid alternate taps, app reopen, switch off/on, and Reduce Motion enabled in WinPlay
+
 # CarPlay26 v0.2.59 — Spotify pill feedback and symmetric spacing
 
 ## v0.2.59 — Bundled navigation improvements (single build)
 
+- Public-build packaging update: the automatic GitHub Actions package includes 12 locally generated solid-colour PNGs and **does not download or bundle the 24 archived Apple-patterned wallpaper JPEGs**; those six wallpaper IDs gracefully fall back to native CarPlay wallpaper imagery because `CP26WallpaperImage` returns `nil` when assets are absent
+- The original archived artwork download remains an **explicitly private, permission-dependent opt-in** (`CP26_INCLUDE_ARCHIVED_WALLPAPERS=1`), never set by the public build workflow; previous public Sileo builds may still contain the older assets and require separate review
 - Real v0.2.58 screenshot confirmed that suppressing UIKit's native tab highlight also removed visible touch-down feedback; add a *separate, temporary rounded blue-tinted press capsule* behind the native buttons, while retaining the existing persistent selected-tab capsule
 - Track the native `UIControl.highlighted` state from the already-hooked `UITabBarButton` state transitions; refresh pill visuals immediately on press and release without replacing touch handling, navigation targets or original tab button frames
 - Fix an actual first/last-tab spacing error: the 0.2.58 selection indicator reached both outer pill edges; use mathematically symmetric 4-point interior horizontal padding plus 4-point top/bottom insets for all four tabs, including the edge tabs

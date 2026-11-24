@@ -5,7 +5,7 @@
 #import <objc/runtime.h>
 #include <math.h>
 
-// CarPlay26 v0.2.59: Add Spotify pill touch feedback and even insets.
+// CarPlay26 v0.2.60: Animate Spotify pill selection changes, preserving native tabs.
 // The CarPlay shell identifies the foreground app via the already-observed
 // DBAppDockViewController.activeBundleIdentifier native getter. A Darwin
 // notification conveys only a boolean to CarPlayTemplateUIHost, avoiding
@@ -20,6 +20,9 @@ static BOOL CP26SpotifyHostNavEnabled = NO;     // Template host: explicit shell
 static BOOL CP26SpotifyNavMutating = NO;
 static NSHashTable<UITabBar *> *CP26SpotifyStyledNavBars;
 static const void *CP26SpotifyNavPillKey = &CP26SpotifyNavPillKey;
+// Last confirmed tab selection on each verified native bar. Separate from
+// UIKit state so presentation can animate once per transition, not every layout.
+static const void *CP26SpotifyNavSelectedIndexKey = &CP26SpotifyNavSelectedIndexKey;
 // Both our persistent selection and temporary pressed indicators live inside
 // the non-interactive custom pill, never on top of native tab hit targets.
 static const void *CP26SpotifyNavPartSnapshotKey = &CP26SpotifyNavPartSnapshotKey;
@@ -390,7 +393,13 @@ static void CP26SpotifyRestoreNavBar(UITabBar *bar) {
         for (UIView *part in button.subviews) CP26SpotifyRestoreNavPart(part);
     }
     UIView *pill=objc_getAssociatedObject(bar,CP26SpotifyNavPillKey);
+    // If the switch is disabled mid-slide, cancel presentation animations and
+    // drop the remembered selection before returning all native visuals.
+    [pill.layer removeAllAnimations];
+    for (UIView *indicator in pill.subviews) [indicator.layer removeAllAnimations];
     [pill removeFromSuperview];
+    objc_setAssociatedObject(bar,CP26SpotifyNavSelectedIndexKey,nil,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     objc_setAssociatedObject(bar,CP26SpotifyNavPillKey,nil,
         OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     [CP26SpotifyStyledNavBars removeObject:bar];
@@ -504,16 +513,45 @@ static void CP26SpotifyUpdateNavBar(UITabBar *bar) {
         [UIColor colorWithWhite:0 alpha:0.07]).CGColor;
     pill.layer.borderWidth=0.5;
     NSUInteger selected=[bar.items indexOfObjectIdenticalTo:bar.selectedItem];
+    NSNumber *priorSelection=objc_getAssociatedObject(bar,CP26SpotifyNavSelectedIndexKey);
+    BOOL changedSelection=priorSelection &&
+        priorSelection.unsignedIntegerValue< buttons.count &&
+        selected< buttons.count && priorSelection.unsignedIntegerValue!=selected;
     UIView *selection=pill.subviews.firstObject;
-    selection.hidden=selected==NSNotFound || selected>=buttons.count;
+    BOOL shouldHideSelection=selected==NSNotFound || selected>=buttons.count;
+    BOOL selectionWasVisible=!selection.hidden;
+    selection.hidden=shouldHideSelection;
     selection.backgroundColor=dark?[UIColor colorWithWhite:1 alpha:0.19]:
         [UIColor colorWithWhite:0 alpha:0.12];
-    if (!selection.hidden) {
+    if (!shouldHideSelection) {
         UIView *chosen=buttons[selected];
-        CGRect rect=CGRectMake(CGRectGetMinX(chosen.frame)-pillFrame.origin.x+selectionInset,
+        CGRect destination=CGRectMake(CGRectGetMinX(chosen.frame)-pillFrame.origin.x+selectionInset,
             4,chosen.bounds.size.width-2*selectionInset,28);
-        if (!CGRectEqualToRect(selection.frame,rect)) selection.frame=rect;
+        if (!CGRectEqualToRect(selection.frame,destination)) {
+            // Never animate initial appearance, layout changes, or Reduce Motion.
+            // BeginFromCurrentState lets rapid tab switches redirect a slide
+            // smoothly without snapping back to the previous model position.
+            BOOL animate=changedSelection && selectionWasVisible &&
+                !UIAccessibilityIsReduceMotionEnabled();
+            if (animate) {
+                [UIView animateWithDuration:0.26 delay:0
+                    options:UIViewAnimationOptionCurveEaseInOut |
+                            UIViewAnimationOptionBeginFromCurrentState |
+                            UIViewAnimationOptionAllowUserInteraction
+                    animations:^{ selection.frame=destination; }
+                    completion:nil];
+            } else {
+                // A genuine geometry relayout must not leave an old animation
+                // running against the new bar bounds or Now Playing arrangement.
+                [selection.layer removeAllAnimations];
+                selection.frame=destination;
+            }
+        }
     }
+    // Set the new state after scheduling movement; UIKit can lay out the bar
+    // repeatedly while a single selection transition is animating.
+    objc_setAssociatedObject(bar,CP26SpotifyNavSelectedIndexKey,
+        selected==NSNotFound?nil:@(selected),OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     // The native iOS 16 pressed rectangle is intentionally hidden, so draw a
     // temporary, rounded touch indicator of our own. Unlike the persistent
     // selected capsule it also appears when pressing a tab already selected.

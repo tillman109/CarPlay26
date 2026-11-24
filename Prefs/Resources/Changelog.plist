@@ -18,6 +18,14 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
+			<string>v0.2.60 — Animated Spotify pill selection</string>
+			<key>footerText</key>
+			<string>Slides the selected tab capsule between Spotify native tabs with a 0.26-second ease-in/out animation, supporting rapid retaps without a visible reset. No animation on first load or geometry changes; respects Reduce Motion. Preserves symmetric spacing, pressed feedback, now playing, live toggles and native hit targets. Requires WinPlay testing.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
 			<string>v0.2.59 — Spotify pill feedback and even padding</string>
 			<key>footerText</key>
 			<string>Bundles a pressed-tab feedback capsule, mathematically symmetric selected-pill padding, and consistent selected/pressed label colours in one release to reduce workflow runs. The native iOS 16 press highlight stays hidden; native tab controls and hit targets remain intact. Preserves early navigation, Now Playing, live Home Styling and feature restoration when disabled. Requires GitHub build and WinPlay validation.</string>

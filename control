@@ -1,8 +1,8 @@
 Package: com.tillman109.carplay26
 Name: CarPlay26
-Version: 0.2.59
+Version: 0.2.60
 Architecture: iphoneos-arm64e
-Description: CarPlay26 Spotify pill with symmetric insets and touch feedback.
+Description: CarPlay26 Spotify pill with smooth tab-selection animation.
 Maintainer: CarPlay26 Project
 Author: CarPlay26 Project
 Section: Tweaks
