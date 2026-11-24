@@ -1,3 +1,11 @@
+# CarPlay26 v0.2.62 — Spotify Home layout
+
+- The Spotify Home Styling switch enables a two-column shortcut grid and six-column shelves. Tile spacing, typography and the continuous teal and blue background follow the supplied iOS 26 reference
+- Home reads Spotify’s native image-row model, including artwork beyond the four buttons visible on the 400-point display. Titles and subtitles come from available Spotify lists and accessibility labels
+- Tap a shelf heading, or press and hold a shortcut, to open the native full list. Returning to Home can supply up to six real items and their available captions for that section. Extra selections use the section and verify the chosen item against its live list
+- Session data stays in memory. The layout report includes per-row counts to identify any content that the installed Spotify version omits
+- The release requires on-device comparison in WinPlay
+
 # CarPlay26 v0.2.61 — Spotify Home and dashboard glass finishing
 
 ## v0.2.61 — Bundled visual treatment of two already-supported surfaces

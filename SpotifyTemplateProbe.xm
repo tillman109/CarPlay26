@@ -1,6 +1,7 @@
 #import <Foundation/Foundation.h>
 #import <CoreFoundation/CoreFoundation.h>
 #import <UIKit/UIKit.h>
+#import "SpotifyHomeLayout.h"
 #import <QuartzCore/QuartzCore.h>
 #include <unistd.h>
 
@@ -322,7 +323,7 @@ static void CP26SpotifyCaptureNow(NSString *reason) {
     if (![NSThread isMainThread]) return;
     UIApplication *app = UIApplication.sharedApplication;
     NSMutableString *report = [NSMutableString stringWithFormat:
-        @"CarPlay26 v0.2.54 | Read-only Spotify template host report\n"
+        @"CarPlay26 v0.2.62 | Read-only Spotify template host report\n"
          "Date=%@\nPID=%d\nProcess=%@\nTrigger=%@\n"
          "No app text, track titles, contact names, images or playlist data collected\n\n",
         NSDate.date, getpid(), NSProcessInfo.processInfo.processName, reason];
@@ -387,6 +388,7 @@ static void CP26SpotifyCaptureNow(NSString *reason) {
         [report appendString:@"No attached visible artwork row found; open Spotify Home and recapture\n"];
 
     CP26SpotifyInspectNavigation(app,report);
+    CP26HomeAppendReport(report);
 
     NSFileManager *fs = NSFileManager.defaultManager;
     NSString *home = NSHomeDirectory();

@@ -12,7 +12,7 @@
 			<key>label</key>
 			<string>Spotify Appearance</string>
 			<key>footerText</key>
-			<string>Spotify Home Styling clears the stock grey backing and adds a soft translucent finish to supported four-artwork Home rows. Changes apply live while Spotify is foreground; original panels return when disabled. Independent of Pill Navigation.</string>
+			<string>Displays Spotify Home with compact two-column shortcuts, six artwork columns and a teal and blue backdrop. Titles and subtitles come from Spotify. Open a shelf once to fill in details supplied on its full list. Press and hold a shortcut to open its section.</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -58,9 +58,9 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-			<string>Background Experiment</string>
+			<string>Spotify Home controls</string>
 			<key>footerText</key>
-			<string>v0.2.52 and v0.2.53 confirmed clear panels and live switching. The native artwork, buttons, touch targets and layout are preserved. This setting does not add iOS 26 wallpaper blur.</string>
+			<string>Tap a shortcut or cover to select it. Tap a shelf heading to open the full list. Home Styling and Pill Navigation have separate switches that apply live.</string>
 		</dict>
 		<dict>
 			<key>cell</key>

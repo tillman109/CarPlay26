@@ -4,8 +4,9 @@
 #import <QuartzCore/QuartzCore.h>
 #import <objc/runtime.h>
 #include <math.h>
+#import "SpotifyHomeLayout.h"
 
-// CarPlay26 v0.2.61: Native Spotify Home glass rows + existing animated pill navigation.
+// CarPlay26 v0.2.62: Spotify Home content layout and native animated pill navigation.
 // The CarPlay shell identifies the foreground app via the already-observed
 // DBAppDockViewController.activeBundleIdentifier native getter. A Darwin
 // notification conveys only a boolean to CarPlayTemplateUIHost, avoiding
@@ -27,12 +28,6 @@ static const void *CP26SpotifyNavSelectedIndexKey = &CP26SpotifyNavSelectedIndex
 // the non-interactive custom pill, never on top of native tab hit targets.
 static const void *CP26SpotifyNavPartSnapshotKey = &CP26SpotifyNavPartSnapshotKey;
 static NSHashTable<UIViewController *> *CP26SpotifyDockControllers;
-static NSHashTable<UIView *> *CP26SpotifyStyledCells;
-static NSHashTable<UIView *> *CP26SpotifyStyledBackings;
-static const void *CP26SpotifyOriginalColorKey = &CP26SpotifyOriginalColorKey;
-static const void *CP26SpotifyOriginalOpaqueKey = &CP26SpotifyOriginalOpaqueKey;
-static const void *CP26SpotifyGlassRowLayerKey = &CP26SpotifyGlassRowLayerKey;
-static const void *CP26SpotifyBackdropSnapshotKey = &CP26SpotifyBackdropSnapshotKey;
 static BOOL CP26SpotifyLastStateKnown = NO;
 static BOOL CP26SpotifyLastState = NO;
 
@@ -148,210 +143,6 @@ static void CP26SpotifyNavChanged(__unused CFNotificationCenterRef center,
 }
 %end
 %end
-
-// Never apply the experiment to all CarPlay template applications.
-// Only the foreground Spotify state from the CarPlay shell can enable it.
-// The earlier 12%-black fill over the observed light backing recreated
-// the stock grey almost exactly (218/217/223). For a visually useful
-// diagnostic, remove the panel fill completely. This does not introduce
-// a wallpaper/blur material: it exposes whatever the native host draws.
-static UIColor *CP26SpotifyExperimentalColor(void) {
-    return UIColor.clearColor;
-}
-
-static BOOL CP26SpotifyIsArtworkRow(UIView *cell) {
-    if (!cell || !CP26SpotifyHostIsActive || !CP26SpotifyHostHomeEnabled ||
-        !CP26SpotifyIsCarPlayWindow(cell.window)) return NO;
-    CGRect r = cell.bounds;
-    if (r.size.width < 300 || r.size.width > 600 ||
-        r.size.height < 95 || r.size.height > 165) return NO;
-    BOOL insideNativeTable = NO;
-    for (UIView *a = cell.superview; a && a != cell.window; a = a.superview) {
-        if ([NSStringFromClass(a.class) isEqualToString:@"CPSTableView"]) {
-            insideNativeTable = YES;
-            break;
-        }
-    }
-    if (!insideNativeTable) return NO;
-    // The verified v0.2.48 Home rows contain a stack of four 61-point art buttons.
-    // Keep this guard so other kinds of CPSImageRowCell are not changed.
-    for (UIView *subview in cell.subviews) {
-        if (![subview isKindOfClass:UIStackView.class]) continue;
-        NSUInteger artworkButtons = 0;
-        for (UIView *item in subview.subviews) {
-            if ([NSStringFromClass(item.class) isEqualToString:@"CPUIHighlightButton"] &&
-                item.bounds.size.width >= 40 && item.bounds.size.width <= 85)
-                artworkButtons++;
-        }
-        if (artworkButtons == 4) return YES;
-    }
-    return NO;
-}
-
-// The v0.2.49 live report confirmed that the row itself became transparent,
-// but also identified two opaque stock white surfaces under it:
-// CPSTableView and its direct UIView content canvas. Treat both as one
-// narrowly-scoped surface, and never modify the host window or navigation bar.
-static BOOL CP26SpotifyBackdropEligible(UIView *view) {
-    if (!view || !CP26SpotifyIsCarPlayWindow(view.window)) return NO;
-    if (objc_getAssociatedObject(view, CP26SpotifyBackdropSnapshotKey)) return YES;
-    UIColor *color = view.backgroundColor;
-    if (!color) return NO;
-    CGFloat white=0, a=0, r=0, g=0, b=0;
-    if ([color getWhite:&white alpha:&a]) return a >= .95 && white >= .75;
-    if ([color getRed:&r green:&g blue:&b alpha:&a])
-        return a >= .95 && r >= .75 && g >= .75 && b >= .75 &&
-            fabs(r-g) < .10 && fabs(g-b) < .10;
-    return NO;
-}
-
-static void CP26SpotifyApplyBackdrop(UIView *view) {
-    if (!view || !NSThread.isMainThread) return;
-    if (!objc_getAssociatedObject(view, CP26SpotifyBackdropSnapshotKey)) {
-        NSDictionary *snapshot = @{
-            @"color": view.backgroundColor ?: (id)[NSNull null],
-            @"opaque": @(view.opaque)
-        };
-        objc_setAssociatedObject(view, CP26SpotifyBackdropSnapshotKey,
-            snapshot, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        if (!CP26SpotifyStyledBackings)
-            CP26SpotifyStyledBackings = [NSHashTable weakObjectsHashTable];
-        [CP26SpotifyStyledBackings addObject:view];
-    }
-    if (![view.backgroundColor isEqual:UIColor.clearColor])
-        view.backgroundColor = UIColor.clearColor;
-    if (view.opaque) view.opaque = NO;
-}
-
-static void CP26SpotifyRestoreBackdrop(UIView *view) {
-    NSDictionary *snapshot = objc_getAssociatedObject(view, CP26SpotifyBackdropSnapshotKey);
-    if (!snapshot) return;
-    id color = snapshot[@"color"];
-    view.backgroundColor = color == [NSNull null] ? nil : (UIColor *)color;
-    view.opaque = [snapshot[@"opaque"] boolValue];
-    objc_setAssociatedObject(view, CP26SpotifyBackdropSnapshotKey,
-        nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    [CP26SpotifyStyledBackings removeObject:view];
-}
-
-static void CP26SpotifyStyleArtworkBackings(UIView *cell) {
-    if (!CP26SpotifyHostIsActive || !cell.window) return;
-    UIView *table = nil;
-    for (UIView *a = cell.superview; a && a != cell.window; a = a.superview) {
-        if ([NSStringFromClass(a.class) isEqualToString:@"CPSTableView"]) {
-            table = a;
-            break;
-        }
-    }
-    UIView *canvas = table.superview;
-    // Only the exact iOS 16 Spotify Home hierarchy observed in diagnostics:
-    // native CPSTableView directly inside a plain UIView content canvas.
-    // This excludes overlay/nav-bar surfaces, all windows, and other apps.
-    if (!table || ![NSStringFromClass(canvas.class) isEqualToString:@"UIView"] ||
-        canvas.window != cell.window ||
-        fabs(table.bounds.size.width - canvas.bounds.size.width) > 2.0 ||
-        !CP26SpotifyBackdropEligible(table) ||
-        !CP26SpotifyBackdropEligible(canvas)) return;
-    CP26SpotifyApplyBackdrop(canvas);
-    CP26SpotifyApplyBackdrop(table);
-}
-
-// Only the already-validated four-artwork CPSImageRowCell receives a soft
-// decorative backing. It is behind native labels/artwork and has no hit testing.
-// This is a static glass-like tint, not the iOS 26 private Liquid Glass material.
-static void CP26SpotifyPolishArtworkRow(UIView *cell) {
-    if (!cell || !NSThread.isMainThread || !cell.window) return;
-    CAGradientLayer *glaze = objc_getAssociatedObject(cell, CP26SpotifyGlassRowLayerKey);
-    if (!glaze) {
-        glaze = [CAGradientLayer layer];
-        glaze.name = @"CarPlay26.SpotifyHomeGlaze";
-        glaze.masksToBounds = YES;
-        objc_setAssociatedObject(cell, CP26SpotifyGlassRowLayerKey,
-            glaze, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    }
-    [CATransaction begin];
-    [CATransaction setDisableActions:YES];
-    if (glaze.superlayer != cell.layer) {
-        [glaze removeFromSuperlayer];
-        [cell.layer insertSublayer:glaze atIndex:0];
-    }
-    glaze.frame = CGRectInset(cell.bounds, 2.0, 2.0);
-    // Keep the stock cell silhouette when UIKit provides a corner radius;
-    // otherwise use restrained rounded corners for this identified row only.
-    CGFloat nativeRadius = cell.layer.cornerRadius;
-    glaze.cornerRadius = nativeRadius > 0 ? MAX(0.0,nativeRadius-2.0) : 15.0;
-    BOOL dark = cell.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
-    UIColor *top = dark ? [UIColor colorWithWhite:1 alpha:0.11] :
-        [UIColor colorWithWhite:1 alpha:0.35];
-    UIColor *middle = dark ? [UIColor colorWithWhite:1 alpha:0.055] :
-        [UIColor colorWithRed:.85 green:.94 blue:1 alpha:0.16];
-    UIColor *bottom = dark ? [UIColor colorWithWhite:1 alpha:0.025] :
-        [UIColor colorWithWhite:1 alpha:0.07];
-    glaze.colors = @[(id)top.CGColor,(id)middle.CGColor,(id)bottom.CGColor];
-    glaze.locations = @[@0.0,@0.42,@1.0];
-    glaze.startPoint = CGPointMake(0.08,0.0);
-    glaze.endPoint = CGPointMake(0.85,1.0);
-    glaze.borderColor = [UIColor colorWithWhite:1
-        alpha:dark ? 0.11 : 0.31].CGColor;
-    glaze.borderWidth = 0.45;
-    [CATransaction commit];
-}
-
-static void CP26SpotifyRestoreCell(UIView *cell) {
-    id saved = objc_getAssociatedObject(cell, CP26SpotifyOriginalColorKey);
-    if (!saved) return;
-    CAGradientLayer *glaze = objc_getAssociatedObject(cell, CP26SpotifyGlassRowLayerKey);
-    [glaze removeFromSuperlayer];
-    objc_setAssociatedObject(cell, CP26SpotifyGlassRowLayerKey,
-        nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    UIColor *original = saved == [NSNull null] ? nil : (UIColor *)saved;
-    if (cell.backgroundColor != original &&
-        ![cell.backgroundColor isEqual:original]) cell.backgroundColor = original;
-    NSNumber *originalOpaque = objc_getAssociatedObject(cell, CP26SpotifyOriginalOpaqueKey);
-    if (originalOpaque) cell.opaque = originalOpaque.boolValue;
-    objc_setAssociatedObject(cell, CP26SpotifyOriginalOpaqueKey,
-        nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    objc_setAssociatedObject(cell, CP26SpotifyOriginalColorKey,
-        nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    [CP26SpotifyStyledCells removeObject:cell];
-}
-
-static void CP26SpotifyUpdateCell(UIView *cell) {
-    if (![NSThread isMainThread] || !cell) return;
-    if (!CP26SpotifyIsArtworkRow(cell)) {
-        CP26SpotifyRestoreCell(cell);
-        return;
-    }
-    id saved = objc_getAssociatedObject(cell, CP26SpotifyOriginalColorKey);
-    if (!saved) {
-        // Do not style cells already managed by another theme or with an
-        // unknown native background. The observed stock row is opaque grey.
-        UIColor *nativeColor = cell.backgroundColor;
-        CGFloat white=0,alpha=0,red=0,green=0,blue=0;
-        BOOL stock = [nativeColor getWhite:&white alpha:&alpha] ?
-            (white > .55 && alpha > .90) :
-            ([nativeColor getRed:&red green:&green blue:&blue alpha:&alpha] &&
-             red > .55 && green > .55 && blue > .55 && alpha > .90 &&
-             fabs(red-green) < .10 && fabs(green-blue) < .10);
-        if (!stock) return;
-        objc_setAssociatedObject(cell, CP26SpotifyOriginalColorKey,
-            nativeColor ?: [NSNull null], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        objc_setAssociatedObject(cell, CP26SpotifyOriginalOpaqueKey,
-            @(cell.opaque), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        if (!CP26SpotifyStyledCells)
-            CP26SpotifyStyledCells = [NSHashTable weakObjectsHashTable];
-        [CP26SpotifyStyledCells addObject:cell];
-    }
-    UIColor *experimentalColor = CP26SpotifyExperimentalColor();
-    if (![cell.backgroundColor isEqual:experimentalColor])
-        cell.backgroundColor = experimentalColor;
-    // A truly clear UIView must not promise UIKit that it draws opaque pixels.
-    // Preserve and restore the native opaque flag on deactivation.
-    if (cell.opaque) cell.opaque = NO;
-    CP26SpotifyStyleArtworkBackings(cell);
-    CP26SpotifyPolishArtworkRow(cell);
-}
-
 
 // Spotify v0.2.54 diagnostics confirmed a 400x44 UITabBar with four native
 // tab buttons. Now Playing eventually occupies the last ~38 points, but it is
@@ -655,8 +446,8 @@ static void CP26SpotifyUpdateNavBar(UITabBar *bar) {
 static void CP26SpotifyVisitViews(UIView *view, NSUInteger depth, NSUInteger *budget) {
     if (!view || !*budget || depth > 22) return;
     --*budget;
-    if ([NSStringFromClass(view.class) isEqualToString:@"CPSImageRowCell"] &&
-        CP26SpotifyHostHomeEnabled) CP26SpotifyUpdateCell(view);
+    if ([NSStringFromClass(view.class) isEqualToString:@"CPSTableView"] &&
+        CP26SpotifyHostHomeEnabled) CP26HomeTableLayout((UITableView *)view);
     if ([view isKindOfClass:UITabBar.class] && CP26SpotifyHostNavEnabled)
         CP26SpotifyUpdateNavBar((UITabBar *)view);
     for (UIView *child in view.subviews) {
@@ -667,12 +458,7 @@ static void CP26SpotifyVisitViews(UIView *view, NSUInteger depth, NSUInteger *bu
 
 static void CP26SpotifyRefreshHost(void) {
     if (!NSThread.isMainThread) return;
-    if (!CP26SpotifyHostIsActive || !CP26SpotifyHostHomeEnabled) {
-        for (UIView *cell in CP26SpotifyStyledCells.allObjects)
-            CP26SpotifyRestoreCell(cell);
-        for (UIView *view in CP26SpotifyStyledBackings.allObjects)
-            CP26SpotifyRestoreBackdrop(view);
-    }
+    CP26HomeSetEnabled(CP26SpotifyHostIsActive && CP26SpotifyHostHomeEnabled);
     if (!CP26SpotifyHostIsActive || !CP26SpotifyHostNavEnabled) {
         for (UITabBar *bar in CP26SpotifyStyledNavBars.allObjects)
             CP26SpotifyRestoreNavBar(bar);
@@ -784,11 +570,74 @@ static void CP26SpotifyHostAskShell(void) {
 %hook CPSImageRowCell
 - (void)layoutSubviews {
     %orig;
-    CP26SpotifyUpdateCell((UIView *)self);
+    CP26HomeLayoutRow((UITableViewCell *)self);
 }
 - (void)didMoveToWindow {
     %orig;
-    CP26SpotifyUpdateCell((UIView *)self);
+    CP26HomeLayoutRow((UITableViewCell *)self);
+}
+- (void)prepareForReuse {
+    CP26HomeRestoreRow((UITableViewCell *)self);
+    %orig;
+}
+- (NSArray *)preferredFocusEnvironments {
+    NSArray *targets = CP26HomeFocusTargets((UITableViewCell *)self);
+    if (targets.count) return targets;
+    return %orig;
+}
+%end
+%end
+
+%group CP26SpotifyRowConfiguration
+%hook CPSImageRowCell
+- (void)configureWithImageRowItem:(id)item selectGridItemBlock:(id)onImage
+    selectTitleBlock:(id)onTitle showActivityIndicator:(BOOL)show {
+    %orig;
+    CP26HomeInvalidateRow((UITableViewCell *)self);
+}
+%end
+%end
+
+%group CP26SpotifyHomeTable
+%hook CPSTableView
+- (void)layoutSubviews {
+    %orig;
+    CP26HomeTableLayout((UITableView *)self);
+}
+- (void)reloadData {
+    %orig;
+    CP26HomeTableReloaded((UITableView *)self);
+}
+%end
+%end
+
+%group CP26SpotifyHomeList
+%hook CPSListTemplateViewController
+- (void)viewDidAppear:(BOOL)animated {
+    %orig;
+    CP26HomeListAppeared((UIViewController *)self);
+}
+- (void)viewDidDisappear:(BOOL)animated {
+    %orig;
+    CP26HomeListDisappeared((UIViewController *)self);
+}
+%end
+%end
+
+%group CP26SpotifyHomeNativeSelection
+%hook CPSListTemplateViewController
+- (void)tableView:(UITableView *)table didSelectRowAtIndexPath:(NSIndexPath *)path {
+    CP26HomeNativeSelection(table);
+    %orig;
+}
+%end
+%end
+
+%group CP26SpotifyHomeRowHeight
+%hook CPSListTemplateViewController
+- (CGFloat)tableView:(UITableView *)table heightForRowAtIndexPath:(NSIndexPath *)path {
+    CGFloat nativeHeight = %orig;
+    return CP26HomeHeight(table,path,nativeHeight);
 }
 %end
 %end
@@ -852,8 +701,23 @@ static void CP26SpotifyHostAskShell(void) {
                     NULL, CP26SpotifyHostModeReceived, (__bridge CFStringRef)event, NULL,
                     CFNotificationSuspensionBehaviorDeliverImmediately);
             }
-            if (NSClassFromString(@"CPSImageRowCell"))
+            Class artworkCell = NSClassFromString(@"CPSImageRowCell");
+            Class listController = NSClassFromString(@"CPSListTemplateViewController");
+            if (artworkCell && listController && NSClassFromString(@"CPSTableView")) {
                 %init(CP26SpotifyArtworkRowStyle);
+                %init(CP26SpotifyHomeTable);
+                %init(CP26SpotifyHomeList);
+                if (class_getInstanceMethod(listController,@selector(tableView:didSelectRowAtIndexPath:))) {
+                    %init(CP26SpotifyHomeNativeSelection);
+                }
+                if (class_getInstanceMethod(listController,@selector(tableView:heightForRowAtIndexPath:))) {
+                    %init(CP26SpotifyHomeRowHeight);
+                }
+                SEL configure = NSSelectorFromString(@"configureWithImageRowItem:selectGridItemBlock:selectTitleBlock:showActivityIndicator:");
+                if (class_getInstanceMethod(artworkCell,configure)) {
+                    %init(CP26SpotifyRowConfiguration);
+                }
+            }
             %init(CP26SpotifyNavPresentation);
             if (NSClassFromString(@"UITabBarButton"))
                 %init(CP26SpotifyNavButtonLayout);

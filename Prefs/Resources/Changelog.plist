@@ -18,6 +18,14 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
+			<string>v0.2.62 — Spotify Home layout</string>
+			<key>footerText</key>
+			<string>Adds two-column shortcuts, six-column artwork shelves, inline headings and a fixed teal and blue backdrop. Uses live Spotify artwork and native selection. Expanded sections supply additional items and captions when available.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
 			<string>v0.2.61 — Spotify Home and dashboard soft-glass finishes</string>
 			<key>footerText</key>
 			<string>Bundles two narrowly targeted cosmetic refinements: soft translucent gradients behind verified Spotify four-artwork Home rows when Home Styling is enabled, and a subtle sheen on the existing two lower Dashboard widget materials with Glass Dashboard Cards. Retains stock maps, native controls, animated Spotify pill, public-build wallpaper restrictions and existing Sileo workflow. Build and dark/light WinPlay testing required.</string>
