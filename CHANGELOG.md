@@ -1,3 +1,7 @@
+# CarPlay26 v0.2.65 — Spotify Home title refresh
+
+- Rechecks visible Spotify Home rows for late-arriving titles and refreshes the title catalogue when Home reloads.
+
 # CarPlay26 v0.2.64 — Spotify Home labels and selections
 
 - Filters identifier-like captions, reads available image titles and reuses Spotify metadata from visited lists. Compacts shelf headings and text-only Home selections.

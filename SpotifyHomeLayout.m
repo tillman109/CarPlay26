@@ -576,6 +576,10 @@ static NSArray<CP26HomeEntry *> *Entries(CPListImageRowItem *row, UITableViewCel
 @property(nonatomic,copy) NSArray *elementsBefore;
 @property(nonatomic) BOOL shortcut;
 @property(nonatomic) BOOL needsContent;
+@property(nonatomic,weak) CPListImageRowItem *captionModel;
+@property(nonatomic) NSUInteger captionAttempt;
+@property(nonatomic) NSUInteger captionGeneration;
+@property(nonatomic) BOOL captionCheckPending;
 @property(nonatomic) NSUInteger revision;
 @end
 
@@ -652,6 +656,42 @@ static NSArray<CP26HomeEntry *> *Entries(CPListImageRowItem *row, UITableViewCel
     }
     if (entry.detail) [self openShelfSelecting:entry.detail];
 }
+// Image rows can precede their readable metadata. Recheck only visible,
+// incomplete rows, with a finite budget per displayed model.
+- (void)scheduleCaptionCheck {
+    if (self.captionModel != self.model) {
+        self.captionGeneration++;
+        self.captionModel = self.model;
+        self.captionAttempt = 0;
+        self.captionCheckPending = NO;
+    }
+    static const NSTimeInterval delays[] = {0.25, 0.75, 2, 4, 8};
+    if (self.captionCheckPending || self.captionAttempt >= sizeof(delays)/sizeof(delays[0])) return;
+    BOOL missing = NO;
+    for (CP26HomeEntry *entry in self.entries) {
+        if (!entry.title.length) { missing = YES; break; }
+    }
+    if (!missing) return;
+
+    NSUInteger generation = self.captionGeneration;
+    NSTimeInterval delay = delays[self.captionAttempt++];
+    self.captionCheckPending = YES;
+    __weak CP26HomeRow *weakRow = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(delay*NSEC_PER_SEC)),dispatch_get_main_queue(), ^{
+        CP26HomeRow *row = weakRow;
+        if (!row || generation != row.captionGeneration) return;
+        row.captionCheckPending = NO;
+        CP26HomeSession *session = row.session;
+        UITableView *table = session.table;
+        if (!CP26HomeEnabled || !CarWindow(table.window) || !row.window ||
+            objc_getAssociatedObject(table,&sessionKey) != session || !HomeTabs(session.home) ||
+            Limited(table) || ![table.visibleCells containsObject:row.cell] ||
+            objc_getAssociatedObject(row.cell,&rowKey) != row) return;
+        UpdateCatalogue(session);
+        CP26HomeLayoutRow(row.cell);
+    });
+}
+
 - (void)configure {
     NSArray *entries = Entries(self.model,self.cell,self.session);
     self.entries = entries;
@@ -695,6 +735,7 @@ static NSArray<CP26HomeEntry *> *Entries(CPListImageRowItem *row, UITableViewCel
     self.cell.isAccessibilityElement = NO;
     self.cell.accessibilityElements = targets;
     self.revision = self.session.revision; self.needsContent = NO;
+    [self scheduleCaptionCheck];
     [self setNeedsLayout];
 }
 - (void)layoutSubviews {
@@ -1025,7 +1066,7 @@ void CP26HomeListDisappeared(UIViewController *vc) {
 void CP26HomeTableReloaded(UITableView *table) {
     if (!CP26HomeEnabled || !NSThread.isMainThread) return;
     CP26HomeSession *home = objc_getAssociatedObject(table,&sessionKey);
-    if (home) home.revision++;
+    if (home) UpdateCatalogue(home);
     // Detail lists can arrive after viewDidAppear. Recheck only while a user
     // navigation to this particular shelf is pending.
     for (CP26HomeSession *s in sessions.allObjects) {

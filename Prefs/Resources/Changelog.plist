@@ -18,6 +18,14 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
+			<string>v0.2.65 — Spotify Home title refresh</string>
+			<key>footerText</key>
+			<string>Rechecks visible Spotify Home rows for late-arriving titles and refreshes the title catalogue when Home reloads.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
 			<string>v0.2.64 — Spotify Home labels and selections</string>
 			<key>footerText</key>
 			<string>Filters identifier-like captions, reads available image titles and reuses Spotify metadata from visited lists. Compacts shelf headings and text-only Home selections.</string>
