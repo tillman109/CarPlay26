@@ -432,20 +432,35 @@ static CGFloat ColumnWidth(UITableView *table) {
     return MAX(100,table.bounds.size.width - 54); // measured native arrow rail + leading inset
 }
 
-// Only the four selected list roots share the reference geometry. Detail lists use
-// their own navigation bars, and the vehicle's limited-list mode owns its layout.
+// A pushed CPS list can sit on the outer navigation controller after the
+// tab controller has left the responder chain (Library -> Playlists).
+BOOL CP26IsBrowseDetail(UIViewController *list) {
+    if (!HostClass(list,@"CPSListTemplateViewController") || !CarWindow(list.viewIfLoaded.window)) return NO;
+    UINavigationController *nav=list.navigationController;
+    UIViewController *top=nav.topViewController;
+    if (!nav || !top || list.presentedViewController) return NO;
+    for (UIViewController *root in list.tabBarController.viewControllers) {
+        if (root==list || ([root isKindOfClass:UINavigationController.class] &&
+            ((UINavigationController *)root).viewControllers.firstObject==list)) return NO;
+    }
+    for (UIViewController *p=list; p; p=p.parentViewController) {
+        if (p==top) return nav.viewControllers.count>1 || nav.presentingViewController!=nil;
+    }
+    return NO;
+}
 static NSUInteger BrowseTab(UITableView *table) {
     if (!CP26HomeEnabled || !CarWindow(table.window) || Limited(table) ||
         table.window.bounds.size.width > table.window.bounds.size.height ||
         table.window.bounds.size.width < 320 || table.window.bounds.size.width > 560) return NSNotFound;
-    UIViewController *list = ListController(table);
-    UITabBarController *tabs = list.tabBarController;
-    if (!HostClass(tabs,@"CPSTabBarViewController") || tabs.viewControllers.count != 4) return NSNotFound;
-    UIViewController *selected = tabs.selectedViewController;
-    if (selected == list) return tabs.selectedIndex;
+    UIViewController *list=ListController(table);
+    if (CP26IsBrowseDetail(list)) return CP26BrowseDetail;
+    UITabBarController *tabs=list.tabBarController;
+    if (!HostClass(tabs,@"CPSTabBarViewController") || tabs.viewControllers.count!=4) return NSNotFound;
+    UIViewController *selected=tabs.selectedViewController;
+    if (selected==list) return tabs.selectedIndex;
     if ([selected isKindOfClass:UINavigationController.class]) {
-        UINavigationController *nav = (UINavigationController *)selected;
-        if (nav.topViewController == list && nav.viewControllers.firstObject == list) return tabs.selectedIndex;
+        UINavigationController *nav=(UINavigationController *)selected;
+        if (nav.topViewController==list && nav.viewControllers.firstObject==list) return tabs.selectedIndex;
     }
     return NSNotFound;
 }
@@ -1107,7 +1122,7 @@ void CP26HomeTableLayout(UITableView *table) {
     NSUInteger tab=BrowseTab(table);
     UIViewController *owner=ListController(table);
     BOOL existingHome=tab==NSNotFound && CarWindow(table.window) && !Limited(table) && HomeTabs(owner);
-    CP26UpdateBrowseTable(table,existingHome ? 0 : tab,tab!=NSNotFound && CP26HasCompactHeader(owner.tabBarController.tabBar));
+    CP26UpdateBrowseTable(table,existingHome ? 0 : tab,tab!=NSNotFound && tab!=CP26BrowseDetail && CP26HasCompactHeader(owner.tabBarController.tabBar));
     if (table.tracking || table.dragging)
         for (CP26HomeSession *s in sessions.allObjects)
             if (s.requestedItem && table != s.table && table.window == s.window) s.requestedItem = nil;
@@ -1200,6 +1215,23 @@ void CP26HomeSetEnabled(BOOL enabled) {
     [sessions removeAllObjects];
 }
 
+UIView *CP26HomeHit(UITableView *table, CGPoint p, UIEvent *event, UIView *native) {
+    CP26HomeSession *s=objc_getAssociatedObject(table,&sessionKey);
+    if (!s || !CP26HomeEnabled || !HomeTabs(s.home) || !CGRectContainsPoint(table.bounds,p) || Limited(table)) return native;
+    for (UIView *v=native; v && v!=table; v=v.superview)
+        if ([NSStringFromClass(v.class) containsString:@"ScrollBar"] || [NSStringFromClass(v.class) containsString:@"Scrollbar"]) return native;
+    for (UITableViewCell *cell in table.visibleCells) {
+        CP26HomeRow *row=objc_getAssociatedObject(cell,&rowKey);
+        if (!row || !CGRectContainsPoint(row.bounds,[row convertPoint:p fromView:table])) continue;
+        for (UIButton *button in row.buttons) {
+            UIView *hit=CP26HitVisibleControl(button,table,p,event);
+            if (hit) return hit;
+        }
+        return CP26HitVisibleControl(row.heading,table,p,event) ?: row;
+    }
+    return native;
+}
+
 void CP26HomeAppendReport(NSMutableString *report) {
     [report appendFormat:@"\nSPOTIFY_HOME_LAYOUT enabled=%d\n",CP26HomeEnabled];
     for (CP26HomeSession *s in sessions.allObjects) {
@@ -1209,6 +1241,9 @@ void CP26HomeAppendReport(NSMutableString *report) {
         for (UITableViewCell *cell in s.table.visibleCells) {
             CP26HomeRow *row = objc_getAssociatedObject(cell,&rowKey);
             NSIndexPath *path = [s.table indexPathForCell:cell];
+            for (CP26HomeButton *button in row.buttons)
+                CP26ReportHit(report,@"home item",button);
+            CP26ReportHit(report,@"home heading",row.heading);
             NSUInteger titles = 0, subtitles = 0;
             for (CP26HomeEntry *e in row.entries) {
                 if (e.title.length) titles++;

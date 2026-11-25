@@ -1,3 +1,11 @@
+# CarPlay26 v0.2.70 — Spotify touch targets and shared dock
+
+- Gives the shared bottom dock the compact glass appearance across the app grid, Dashboard and apps. Removes Settings from the dock and honours the existing pinned app choice
+- Styles pushed Spotify lists, including Library → Playlists, with the same rows and background as the root tabs. Preserves section headings, selection, scroll controls and app-provided accessories
+- Uses the round Back button on the left, the live Spotify mini-player on supported browse headers and the native queue action on the right of the full player
+- Centres player artwork, metadata, transport and secondary controls over the current blurred cover. The original playback buttons handle touches at the displayed positions
+- Adds centre and edge hit checks to the existing Spotify and dock reports
+
 # CarPlay26 v0.2.69 — Spotify portrait layout
 
 - Uses the four iOS 26 browse screenshots and the separate full-player screenshot on the 400 × 416 portrait display

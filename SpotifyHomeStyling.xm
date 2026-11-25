@@ -70,7 +70,6 @@ static void CP26SpotifySendShellState(BOOL force) {
         CP26SpotifyLastState == spotifyIsForeground) return;
     CP26SpotifyLastStateKnown = YES;
     CP26SpotifyLastState = spotifyIsForeground;
-    CP26RefreshGlassDock();
     // Mode notifications precede the foreground signal so the host can keep
     // panel and navigation switches independent without reading shell prefs.
     CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
@@ -151,10 +150,6 @@ static void CP26SpotifyNavChanged(__unused CFNotificationCenterRef center,
 // not present when Spotify initially renders. Do NOT require its presence:
 // otherwise a correctly active Spotify screen flashes the stock tab bar until
 // playback controls initialise. Preserve native tab/button touch handlers.
-BOOL CP26SpotifyUsesGlassDock(void) {
-    return CP26SpotifyLastStateKnown && CP26SpotifyLastState && CP26SpotifyStyleEnabled;
-}
-
 static char nativeTabKey, compactTabKey, bandKey, barAppearanceKey, managedWrapperKey;
 BOOL CP26HasCompactHeader(UITabBar *bar) { return bar && objc_getAssociatedObject(bar,&bandKey)!=nil; }
 
@@ -386,7 +381,7 @@ static void CP26SpotifyUpdateNavBar(UITabBar *bar) {
             CP26SpotifyRememberNavPart(child); child.alpha=0;
         }
     }
-    BOOL expanded=CP26UpdateMiniPlayer(bar,wrapper,CGRectMake(w-165*u,0,164*u,33*u));
+    BOOL expanded=CP26UpdateMiniPlayer(bar,wrapper,nil,nil,CGRectMake(w-165*u,0,164*u,33*u));
     UIView *previousWrapper=objc_getAssociatedObject(bar,&managedWrapperKey);
     if (previousWrapper && (previousWrapper!=wrapper || !expanded)) {
         CP26SpotifyRestoreNavPart(previousWrapper);
@@ -521,7 +516,12 @@ static void CP26SpotifyVisitViews(UIView *view, NSUInteger depth, NSUInteger *bu
     --*budget;
     UIResponder *owner=view.nextResponder;
     if (CP26SpotifyHostHomeEnabled && [owner isKindOfClass:NSClassFromString(@"CPSNowPlayingViewController")] &&
-        ((UIViewController *)owner).viewIfLoaded==view) CP26PlayerLayout((UIViewController *)owner,YES);
+        ((UIViewController *)owner).viewIfLoaded==view) {
+        CP26PlayerLayout((UIViewController *)owner,YES);
+        CP26SetHeader((UIViewController *)owner,YES,YES);
+    }
+    if (CP26SpotifyHostNavEnabled && [owner isKindOfClass:UIViewController.class] &&
+        CP26IsBrowseDetail((UIViewController *)owner)) CP26SetHeader((UIViewController *)owner,NO,YES);
     if ([NSStringFromClass(view.class) isEqualToString:@"CPSTableView"] &&
         CP26SpotifyHostHomeEnabled) CP26HomeTableLayout((UITableView *)view);
     if ([view isKindOfClass:UITabBar.class] && CP26SpotifyHostNavEnabled)
@@ -537,6 +537,7 @@ static void CP26SpotifyRefreshHost(void) {
     BOOL style=CP26SpotifyHostIsActive && CP26SpotifyHostHomeEnabled;
     CP26HomeSetEnabled(style);
     if (!style) CP26RestorePlayers();
+    CP26RestoreHeaders(CP26SpotifyHostIsActive && CP26SpotifyHostNavEnabled,style);
     if (!CP26SpotifyHostIsActive || !CP26SpotifyHostNavEnabled) {
         for (UITabBar *bar in CP26SpotifyStyledNavBars.allObjects)
             CP26SpotifyRestoreNavBar(bar);
@@ -583,8 +584,36 @@ static void CP26SpotifyHostAskShell(void) {
         CFSTR("com.tillman109.carplay26.spotify.state.request"), NULL, NULL, TRUE);
 }
 
+%group CP26SpotifyPushedHeader
+%hook UINavigationBar
+- (void)layoutSubviews {
+    %orig;
+    CP26LayoutHeader((UINavigationBar *)self);
+}
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
+    UIView *native=%orig;
+    return CP26HeaderHit((UINavigationBar *)self,point,event,native);
+}
+%end
+%end
+
 %group CP26SpotifyNavPresentation
 %hook UITabBar
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
+    UITabBar *bar=(UITabBar *)self;
+    if (!CP26HasCompactHeader(bar) || !bar.userInteractionEnabled || bar.hidden || bar.alpha<=.01) return %orig;
+    UIView *hit=CP26MiniPlayerHit(bar,point,event);
+    if (hit) return hit;
+    for (UIView *v in bar.subviews) {
+        BOOL tab=objc_getAssociatedObject(v,&compactTabKey)!=nil;
+        BOOL waveform=[NSStringFromClass(v.class) isEqualToString:@"CPUINowPlayingButtonWrapperView"];
+        if (tab || waveform) {
+            hit=CP26HitVisibleControl(v,bar,point,event);
+            if (hit) return hit;
+        }
+    }
+    return nil;
+}
 - (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
     UITabBar *bar=(UITabBar *)self;
     if (objc_getAssociatedObject(bar,&bandKey) && point.y>MIN(bar.bounds.size.height,bar.bounds.size.width*33/400.0)) {
@@ -710,6 +739,14 @@ static void CP26SpotifyHostAskShell(void) {
 
 %group CP26SpotifyHomeTable
 %hook CPSTableView
+- (NSIndexPath *)indexPathForRowAtPoint:(CGPoint)point {
+    NSIndexPath *native=%orig;
+    return CP26BrowsePathAtPoint((UITableView *)self,point,native);
+}
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
+    UIView *native=%orig;
+    return CP26HomeHit((UITableView *)self,point,event,native);
+}
 - (void)layoutSubviews {
     %orig;
     CP26HomeTableLayout((UITableView *)self);
@@ -725,10 +762,13 @@ static void CP26SpotifyHostAskShell(void) {
 %hook CPSListTemplateViewController
 - (void)viewDidAppear:(BOOL)animated {
     %orig;
-    CP26HomeListAppeared((UIViewController *)self);
+    UIViewController *vc=(UIViewController *)self;
+    CP26HomeListAppeared(vc);
+    CP26SetHeader(vc,NO,CP26SpotifyHostIsActive && CP26SpotifyHostNavEnabled && CP26IsBrowseDetail(vc));
 }
 - (void)viewDidDisappear:(BOOL)animated {
     %orig;
+    CP26SetHeader((UIViewController *)self,NO,NO);
     CP26HomeListDisappeared((UIViewController *)self);
 }
 %end
@@ -754,12 +794,21 @@ static void CP26SpotifyHostAskShell(void) {
 
 %group CP26SpotifyPlaybackScreen
 %hook CPSNowPlayingViewController
+- (void)viewDidAppear:(BOOL)animated {
+    %orig;
+    BOOL enabled=CP26SpotifyHostIsActive && CP26SpotifyHostHomeEnabled;
+    CP26PlayerLayout((UIViewController *)self,enabled);
+    CP26SetHeader((UIViewController *)self,YES,enabled);
+}
 - (void)viewDidLayoutSubviews {
     %orig;
-    CP26PlayerLayout((UIViewController *)self,CP26SpotifyHostIsActive && CP26SpotifyHostHomeEnabled);
+    BOOL enabled=CP26SpotifyHostIsActive && CP26SpotifyHostHomeEnabled;
+    CP26PlayerLayout((UIViewController *)self,enabled);
+    CP26SetHeader((UIViewController *)self,YES,enabled);
 }
 - (void)viewDidDisappear:(BOOL)animated {
     %orig;
+    CP26SetHeader((UIViewController *)self,YES,NO);
     CP26PlayerLayout((UIViewController *)self,NO);
 }
 %end
@@ -869,6 +918,7 @@ static void CP26SpotifyHostAskShell(void) {
             if (NSClassFromString(@"CPUINowPlayingView")) {
                 %init(CP26SpotifyPlayerViewLayout);
             }
+            %init(CP26SpotifyPushedHeader);
             %init(CP26SpotifyNavPresentation);
             if (NSClassFromString(@"UITabBarButton"))
                 %init(CP26SpotifyNavButtonLayout);

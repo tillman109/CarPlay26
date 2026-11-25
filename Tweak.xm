@@ -609,7 +609,7 @@ static void PrimeMediaControl(UIView *v) {
 
 // The actual local status bar is a short window in the CarPlay process.
 // Decorate the local dock and constrain its composited output to a capsule.
-// Do not modify foreground geometry, hit testing or the remote host.
+// Size and route the local controls in the same dock coordinate space.
 static UIView *DockRoot(UIWindow *w) {
     if (!Named(w,@"DBStatusBarWindow") ||
         ![w.windowScene.session.role isEqualToString:@"UIWindowSceneSessionRoleCarPlay"] ||
@@ -631,24 +631,17 @@ static BOOL DockNativeBackground(UIView *v, UIWindow *w) {
 // The native root/backdrop may be repainted during an app-page transition.
 // Constrain the entire *local* status bar output as a final clipping boundary.
 // The extra half point preserves the existing capsule rim and antialiasing.
-// Do not replace a native or another tweak's mask. No frame/touch changes.
-extern BOOL CP26SpotifyUsesGlassDock(void);
-static BOOL SpotifyDockWindow(UIWindow *w) {
-    CGSize display=w.windowScene.screen.bounds.size;
-    return CP26SpotifyUsesGlassDock() && display.height>=display.width &&
-        w.bounds.size.width>=320 && w.bounds.size.width<=560;
-}
-static CGRect SpotifyDockRect(CGRect b) {
-    CGFloat u=b.size.width/400, h=MIN(b.size.height-2,34.4*u);
-    return CGRectMake(2.5*u,CGRectGetMaxY(b)-h-.5*u,b.size.width-4*u,h);
+// Preserve masks owned by UIKit or another tweak.
+static CGRect CompactDockRect(CGRect bounds) {
+    CGFloat u=MIN(bounds.size.width/400,bounds.size.height/45);
+    CGFloat h=MIN(bounds.size.height-2,34.4*u);
+    return CGRectMake(2.5*u,CGRectGetMaxY(bounds)-h-.5*u,bounds.size.width-4*u,h);
 }
 static void ClipLocalDockWindow(UIWindow *w, NSHashTable<UIView *> *keep) {
     if (!dockGlassEnabled || !dockMasks || !DockRoot(w)) return;
     CALayer *backing = w.layer;
     CGRect bounds = backing.bounds;
-    CGRect capsule = CGRectInset(CGRectMake(0,0,bounds.size.width,bounds.size.height),3.5,1.5);
-    BOOL spotify=SpotifyDockWindow(w);
-    if (spotify) capsule=CGRectInset(SpotifyDockRect(bounds),-.4,-.4);
+    CGRect capsule=CGRectInset(CompactDockRect(bounds),-.4,-.4);
     if (!ValidRect(capsule)) return;
     CAShapeLayer *mask = [dockMasks objectForKey:w];
     if (backing.mask && backing.mask != mask) return;
@@ -661,7 +654,7 @@ static void ClipLocalDockWindow(UIWindow *w, NSHashTable<UIView *> *keep) {
     if (!CGRectEqualToRect(mask.frame,bounds) || !mask.path ||
         !CGRectEqualToRect(CGPathGetBoundingBox(mask.path),capsule)) {
         mask.frame = bounds;
-        mask.path = [UIBezierPath bezierPathWithRoundedRect:capsule cornerRadius:capsule.size.height*(spotify?.4:.5)].CGPath;
+        mask.path = [UIBezierPath bezierPathWithRoundedRect:capsule cornerRadius:capsule.size.height*.4].CGPath;
     }
     if (backing.mask != mask) backing.mask = mask;
     if (keep) [keep addObject:w];
@@ -744,16 +737,14 @@ static BOOL ApplyDock(UIWindow *w, NSHashTable<UIView *> *keep, NSHashTable<UIVi
     if (native == UIUserInterfaceStyleUnspecified) native = w.traitCollection.userInterfaceStyle;
     UIUserInterfaceStyle theme = Theme(native);
     if (native == UIUserInterfaceStyleUnspecified || theme == UIUserInterfaceStyleUnspecified) return NO;
-    BOOL spotify=SpotifyDockWindow(w);
-    CGRect frame = spotify ? SpotifyDockRect(root.bounds) : CGRectInset(root.bounds,4,2);
+    CGRect frame=CompactDockRect(root.bounds);
     if (!ValidRect(frame)) return NO;
     BOOL dark = theme == UIUserInterfaceStyleDark;
     BOOL nativeDark = native == UIUserInterfaceStyleDark;
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
     if (!v) {
-        // Isolate backdrop sampling from page transitions: a plain view,
-        // no UIVisualEffectView, material, filter or live blur of our own.
+        // The shared surface sits behind the native apps and status indicators.
         v = [[UIView alloc] initWithFrame:frame];
         v.opaque = NO;
         v.layer.opaque = NO;
@@ -764,7 +755,7 @@ static BOOL ApplyDock(UIWindow *w, NSHashTable<UIView *> *keep, NSHashTable<UIVi
         [dockSurfaces setObject:v forKey:w];
     }
     if (!CGRectEqualToRect(v.frame,frame)) v.frame = frame;
-    v.layer.cornerRadius = frame.size.height*(spotify?.4:.5);
+    v.layer.cornerRadius = frame.size.height*.4;
     v.clipsToBounds = YES;
     if (v.superview != root || root.subviews.firstObject != v) {
         if (v.superview == root) [root sendSubviewToBack:v];
@@ -781,41 +772,17 @@ static BOOL ApplyDock(UIWindow *w, NSHashTable<UIView *> *keep, NSHashTable<UIVi
     layer.masksToBounds = YES;
     layer.startPoint = CGPointMake(.1,0);
     layer.endPoint = CGPointMake(.85,1);
-    CP26ReferenceDock(w,root,frame,spotify);
-    if (spotify) CP26GlassPill(v,v.layer.cornerRadius); else CP26RemoveGlass(v);
-    if (spotify) {
-        layer.colors = @[(id)[UIColor colorWithRed:.25 green:.25 blue:.29 alpha:.73].CGColor,
-                         (id)[UIColor colorWithRed:.21 green:.21 blue:.25 alpha:.73].CGColor];
-        layer.locations=nil; layer.borderWidth=.55;
-        layer.borderColor=[UIColor colorWithWhite:1 alpha:.17].CGColor;
-    } else if (dockLiquidStyle) {
-        // Liquid-Glass-inspired appearance without a live UIKit backdrop.
-        // The v0.2.15 fixed surface and v0.2.16 colour guards remain intact.
-        // Keep some contrast when native CarPlay is dark, since its icon/text
-        // colours are deliberately not changed by this tweak.
-        UIColor *top = dark ? [UIColor colorWithWhite:.28 alpha:nativeDark ? .57 : .30] :
-            [UIColor colorWithWhite:1 alpha:nativeDark ? .26 : .38];
-        UIColor *middle = dark ? [UIColor colorWithWhite:.17 alpha:nativeDark ? .40 : .20] :
-            [UIColor colorWithRed:.94 green:.97 blue:1 alpha:nativeDark ? .24 : .20];
-        UIColor *bottom = dark ? [UIColor colorWithWhite:.025 alpha:nativeDark ? .53 : .29] :
-            [UIColor colorWithWhite:.79 alpha:nativeDark ? .34 : .16];
-        layer.colors = @[(id)top.CGColor,(id)middle.CGColor,(id)bottom.CGColor];
-        layer.locations = @[@0,@.48,@1];
-        layer.borderColor = [UIColor colorWithWhite:1 alpha:nativeDark ? .18 : .28].CGColor;
-        layer.borderWidth = .5;
-    } else {
-        // Unmodified stable v0.2.20 appearance.
-        UIColor *top = dark ? [UIColor colorWithWhite:.16 alpha:nativeDark ? .60 : .20] :
-            [UIColor colorWithWhite:1 alpha:nativeDark ? .22 : .52];
-        UIColor *bottom = dark ? [UIColor colorWithWhite:.02 alpha:nativeDark ? .52 : .12] :
-            [UIColor colorWithWhite:nativeDark ? .15 : .85 alpha:nativeDark ? .24 : .34];
-        layer.colors = @[(id)top.CGColor,(id)bottom.CGColor];
-        layer.locations = nil;
-        layer.borderColor = [UIColor colorWithWhite:1 alpha:nativeDark ? .32 : .55].CGColor;
-        layer.borderWidth = .8;
-    }
+    CP26ReferenceDock(w,root,frame,YES);
+    CP26GlassPill(v,v.layer.cornerRadius);
+    UIColor *top=dark ? [UIColor colorWithRed:.25 green:.25 blue:.29 alpha:.73] :
+        [UIColor colorWithWhite:.89 alpha:nativeDark?.42:.76];
+    UIColor *bottom=dark ? [UIColor colorWithRed:.21 green:.21 blue:.25 alpha:.73] :
+        [UIColor colorWithRed:.79 green:.80 blue:.84 alpha:nativeDark?.38:.72];
+    layer.colors=@[(id)top.CGColor,(id)bottom.CGColor];
+    layer.locations=nil; layer.borderWidth=.55;
+    layer.borderColor=[UIColor colorWithWhite:1 alpha:dark?.17:.32].CGColor;
     if (layer.superlayer != v.layer) { [layer removeFromSuperlayer]; [v.layer addSublayer:layer]; }
-    if (!spotify && dockLiquidStyle && dockLiquidSheens && dockLiquidRims && dockLiquidInnerShades) {
+    if (dockLiquidStyle && dockLiquidSheens && dockLiquidRims && dockLiquidInnerShades) {
         // An upper glass catchlight. It is static, noninteractive and does not
         // sample the changing home-screen wallpaper during page transitions.
         CAGradientLayer *sheen = [dockLiquidSheens objectForKey:v];
@@ -912,12 +879,6 @@ static void PrimeLocalDock(UIWindow *w) {
     ApplyDock(w,nil,nil,nil);
     dockLayoutBusy = NO;
 }
-void CP26RefreshGlassDock(void) {
-    if (!dockGlassEnabled) return;
-    dispatch_async(dispatch_get_main_queue(), ^{
-        for (UIWindow *w in dockSurfaces.keyEnumerator.allObjects) PrimeLocalDock(w);
-    });
-}
 static BOOL ProtectDockWindow(UIWindow *w) {
     return dockGlassEnabled && NSThread.isMainThread &&
         [dockBackings objectForKey:w] != nil && DockRoot(w) != nil;
@@ -984,6 +945,10 @@ static BOOL ProtectRegisteredDockLayer(CALayer *layer) {
 
 %group DockWindowLifecycle
 %hook DBStatusBarWindow
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
+    UIView *native=%orig;
+    return CP26DockHit((UIWindow *)self,point,event,native);
+}
 - (void)layoutSubviews {
     %orig;
     PrimeLocalDock((UIWindow *)self);
@@ -1757,7 +1722,9 @@ static void CP26RequestWallpaperReports(void) {
         controlsEnabled = CP26Bool(@"GlassControls");
         diagnosticsEnabled = CP26Bool(@"Diagnostics");
         dockShortcutProbeEnabled = CP26Bool(@"InspectDockShortcuts");
-        pinnedDockBundle = [CP26PinnedBundle() copy];
+        // The compact shell dock uses the native third slot, keeping one
+        // target for both the visible app and its launch action.
+        pinnedDockBundle=[CP26PinnedBundle() copy];
         if (pinnedDockBundle.length && CP26PinAPIsAvailable()) {
             pinOtherButtons = [NSHashTable weakObjectsHashTable];
             %init(DockPinning);

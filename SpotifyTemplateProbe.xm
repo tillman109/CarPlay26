@@ -179,7 +179,7 @@ static const NSUInteger CP26SpotifyNavMaxNodes = 240;
 static BOOL CP26SpotifyIsNavigationSurface(UIView *view) {
     NSString *name = NSStringFromClass(view.class);
     return [name isEqualToString:@"CPSNavigationBar"] ||
-           [name isEqualToString:@"CPSTabBar"] ||
+           [name isEqualToString:@"CPSTabBar"] || [view isKindOfClass:UINavigationBar.class] ||
            [view isKindOfClass:UITabBar.class];
 }
 
@@ -199,6 +199,9 @@ static void CP26SpotifyDumpNavigationNode(UIView *view,
         view.alpha,view.hidden,view.opaque,view.clipsToBounds,
         view.layer.cornerRadius,view.userInteractionEnabled,
         (unsigned long)view.subviews.count];
+    if ([NSStringFromClass(view.class) isEqualToString:@"UITabBarButton"] &&
+        [view.superview isKindOfClass:UITabBar.class] && CP26HasCompactHeader((UITabBar *)view.superview))
+        CP26ReportHit(report,@"browse tab",view);
     if ([view isKindOfClass:UIControl.class]) {
         UIControl *control=(UIControl *)view;
         [report appendFormat:
@@ -324,7 +327,7 @@ static void CP26SpotifyCaptureNow(NSString *reason) {
     if (![NSThread isMainThread]) return;
     UIApplication *app = UIApplication.sharedApplication;
     NSMutableString *report = [NSMutableString stringWithFormat:
-        @"CarPlay26 v0.2.69 | Spotify template host geometry\n"
+        @"CarPlay26 v0.2.70 | Spotify template host geometry\n"
          "Date=%@\nPID=%d\nProcess=%@\nTrigger=%@\n"
          "No app text, track titles, contact names, images or playlist data collected\n\n",
         NSDate.date, getpid(), NSProcessInfo.processInfo.processName, reason];
@@ -393,6 +396,7 @@ static void CP26SpotifyCaptureNow(NSString *reason) {
     CP26BrowseReport(report);
     CP26PlaybackReport(report);
     CP26FullPlayerReport(report);
+    CP26HeaderReport(report);
 
     NSFileManager *fs = NSFileManager.defaultManager;
     NSString *home = NSHomeDirectory();

@@ -80,15 +80,15 @@ static void LoadPlaybackAPI(void) {
     });
 }
 
-static UITabBarController *Owner(UITabBar *bar) {
+static UITabBarController *Owner(UIView *bar) {
     for (UIResponder *r=bar; r; r=r.nextResponder)
         if ([r isKindOfClass:UITabBarController.class] && ((UITabBarController *)r).tabBar==bar)
             return (UITabBarController *)r;
     return nil;
 }
 
-static id<CP26MediaModel> Manager(UITabBar *bar) {
-    UIViewController *vc = Owner(bar).selectedViewController;
+static id<CP26MediaModel> Manager(UIView *bar, UIViewController *context) {
+    UIViewController *vc=context ?: Owner(bar).selectedViewController;
     if ([vc isKindOfClass:UINavigationController.class]) vc=((UINavigationController *)vc).topViewController;
     id<CP26MediaModel> host=(id)vc;
     id manager=[host respondsToSelector:@selector(nowPlayingManager)] ? [host nowPlayingManager] : nil;
@@ -111,7 +111,10 @@ static BOOL SpotifyClient(CFTypeRef client) {
 }
 
 @interface CP26MiniPlayer : UIView
-@property(nonatomic,weak) UITabBar *bar;
+@property(nonatomic,weak) UIView *bar;
+@property(nonatomic,weak) UIViewController *context;
+@property(nonatomic,weak) UIBarButtonItem *openItem;
+@property(nonatomic,strong) CAGradientLayer *fade;
 @property(nonatomic,weak) UIControl *nativeButton;
 @property(nonatomic,strong) UIView *glass;
 @property(nonatomic,strong) UIButton *openButton, *transport, *next;
@@ -149,7 +152,11 @@ static BOOL SpotifyClient(CFTypeRef client) {
         _art=[UIImageView new]; _art.clipsToBounds=YES; _art.layer.cornerRadius=3.5;
         _art.contentMode=UIViewContentModeScaleAspectFill; _art.userInteractionEnabled=NO;
         _caption=[UILabel new]; _caption.textColor=UIColor.whiteColor;
-        _caption.lineBreakMode=NSLineBreakByTruncatingTail;
+        _caption.lineBreakMode=NSLineBreakByClipping;
+        _fade=[CAGradientLayer layer]; _fade.startPoint=CGPointMake(0,.5); _fade.endPoint=CGPointMake(1,.5);
+        _fade.colors=@[(id)UIColor.blackColor.CGColor,(id)UIColor.blackColor.CGColor,(id)UIColor.clearColor.CGColor];
+        _fade.locations=@[@0,@.83,@1];
+        _caption.layer.mask=_fade;
         [_openButton addSubview:_art]; [_openButton addSubview:_caption];
         self.accessibilityElements=@[_openButton,_transport,_next];
         __weak CP26MiniPlayer *weakSelf=self;
@@ -175,17 +182,13 @@ static BOOL SpotifyClient(CFTypeRef client) {
 - (void)dealloc { [NSNotificationCenter.defaultCenter removeObserver:self]; [_timer invalidate]; }
 - (void)open {
     if (!self.wanted || ![self barVisible]) return;
+    if (CP26ActivateBarItem(self.openItem,self.nativeButton)) return;
     id<CP26MediaModel> owner=(id)Owner(self.bar);
-    if ([owner respondsToSelector:@selector(_nowPlayingButtonTapped)]) { [owner _nowPlayingButtonTapped]; return; }
-    UIControl *button=self.nativeButton;
-    if (button.enabled && (button.allControlEvents & UIControlEventTouchUpInside))
-        [button sendActionsForControlEvents:UIControlEventTouchUpInside];
-    else if (button.enabled && (button.allControlEvents & UIControlEventPrimaryActionTriggered))
-        [button sendActionsForControlEvents:UIControlEventPrimaryActionTriggered];
+    if ([owner respondsToSelector:@selector(_nowPlayingButtonTapped)]) [owner _nowPlayingButtonTapped];
 }
 - (void)command:(BOOL)next {
     if (!self.wanted || ![self barVisible]) return;
-    id<CP26MediaModel> manager=Manager(self.bar), snapshot=Snapshot(manager);
+    id<CP26MediaModel> manager=Manager(self.bar,self.context), snapshot=Snapshot(manager);
     id<CP26MediaModel> response=[snapshot respondsToSelector:@selector(response)] ? snapshot.response : nil;
     id request=nil;
     if (next) {
@@ -261,11 +264,12 @@ static BOOL SpotifyClient(CFTypeRef client) {
     });
 }
 - (BOOL)update {
-    id<CP26MediaModel> manager=Manager(self.bar), snapshot=Snapshot(manager);
+    id<CP26MediaModel> manager=Manager(self.bar,self.context), snapshot=Snapshot(manager);
     NSString *title=[snapshot respondsToSelector:@selector(title)] ? snapshot.title : nil;
     if (!title.length && self.remoteOwned) title=self.remoteTitle;
     id<CP26MediaModel> owner=(id)Owner(self.bar);
-    self.wanted=title.length && ([owner respondsToSelector:@selector(_nowPlayingButtonTapped)] ||
+    self.wanted=title.length && ((self.openItem.enabled && self.openItem.action) ||
+        [owner respondsToSelector:@selector(_nowPlayingButtonTapped)] ||
         (self.nativeButton.enabled && (self.nativeButton.allControlEvents &
            (UIControlEventTouchUpInside | UIControlEventPrimaryActionTriggered))));
     self.hidden=!self.wanted;
@@ -327,11 +331,14 @@ static BOOL SpotifyClient(CFTypeRef client) {
     _art.frame=CGRectMake(left,(h-artwork)/2,artwork,artwork);
     _caption.font=[UIFont systemFontOfSize:9.7*u weight:UIFontWeightSemibold];
     CGFloat x=left+artwork+6*u;
-    _caption.frame=CGRectMake(x,0,MAX(1,_openButton.bounds.size.width-x),h);
+    _caption.frame=CGRectMake(x,0,MAX(1,_openButton.bounds.size.width-x-1.5*u),h);
+    [CATransaction begin]; [CATransaction setDisableActions:YES]; _fade.frame=_caption.bounds;
+    BOOL overflow=[_caption sizeThatFits:CGSizeMake(CGFLOAT_MAX,h)].width>_caption.bounds.size.width;
+    _caption.layer.mask=overflow ? _fade : nil; [CATransaction commit];
 }
 @end
 
-BOOL CP26UpdateMiniPlayer(UITabBar *bar, UIView *wrapper, CGRect frame) {
+BOOL CP26UpdateMiniPlayer(UIView *bar, UIView *wrapper, UIViewController *context, UIBarButtonItem *item, CGRect frame) {
     CP26MiniPlayer *mini=objc_getAssociatedObject(bar,&miniKey);
     if (!mini) {
         LoadPlaybackAPI();
@@ -341,7 +348,8 @@ BOOL CP26UpdateMiniPlayer(UITabBar *bar, UIView *wrapper, CGRect frame) {
         if (!players) players=[NSHashTable weakObjectsHashTable];
         [players addObject:mini];
     }
-    UIControl *button=nil;
+    mini.context=context; mini.openItem=item;
+    UIControl *button=[wrapper isKindOfClass:UIControl.class] ? (UIControl *)wrapper : nil;
     for (UIView *v in wrapper.subviews)
         if ([v isKindOfClass:UIControl.class] && [v isKindOfClass:NSClassFromString(@"CPUINowPlayingButton")])
             { button=(UIControl *)v; break; }
@@ -350,7 +358,11 @@ BOOL CP26UpdateMiniPlayer(UITabBar *bar, UIView *wrapper, CGRect frame) {
     if (bar.subviews.lastObject!=mini) [bar bringSubviewToFront:mini];
     return [mini update];
 }
-void CP26RemoveMiniPlayer(UITabBar *bar) {
+UIView *CP26MiniPlayerHit(UIView *bar, CGPoint p, UIEvent *event) {
+    CP26MiniPlayer *mini=objc_getAssociatedObject(bar,&miniKey);
+    return CP26HitVisibleControl(mini,bar,p,event);
+}
+void CP26RemoveMiniPlayer(UIView *bar) {
     CP26MiniPlayer *p=objc_getAssociatedObject(bar,&miniKey);
     if (!p) return;
     p.active=NO; [p.timer invalidate]; [p removeFromSuperview];
@@ -372,8 +384,12 @@ void CP26InvalidatePlayback(void) {
 void CP26PlaybackReport(NSMutableString *out) {
     for (CP26MiniPlayer *p in players.allObjects) {
         if (!p.window) continue;
+        if (!p.hidden) {
+            CP26ReportHit(out,@"mini open",p.openButton); CP26ReportHit(out,@"mini play",p.transport);
+            CP26ReportHit(out,@"mini next",p.next);
+        }
         [out appendFormat:@"MINI visible=%d frame=%@ model=%d remoteSpotify=%d artwork=%d play=%d skip=%d playingKnown=%d\n",
-            !p.hidden,NSStringFromCGRect(p.frame),Snapshot(Manager(p.bar))!=nil,p.remoteOwned,
+            !p.hidden,NSStringFromCGRect(p.frame),Snapshot(Manager(p.bar,p.context))!=nil,p.remoteOwned,
             p.art.image!=nil,p.transport.enabled,p.next.enabled,p.playing!=nil];
     }
 }

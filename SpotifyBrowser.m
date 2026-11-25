@@ -3,13 +3,15 @@
 #import <objc/runtime.h>
 #import <QuartzCore/QuartzCore.h>
 
-static char browseKey, faceKey;
+static char browseKey, faceKey, nativeRowKey;
 static NSHashTable<UITableView *> *tables;
 
 @interface CP26ListFace : UIView
 @property(nonatomic,strong) UIImageView *cover, *accessory, *playing;
 @property(nonatomic,strong) UILabel *title, *detail;
-@property(nonatomic,strong) UIView *separator;
+@property(nonatomic,strong) UIView *separator, *progressTrack, *progressFill;
+@property(nonatomic,strong) UILabel *explicitMark;
+@property(nonatomic) CGFloat progress, accessoryInset;
 @property(nonatomic,strong) NSMapTable<UIView *,NSNumber *> *nativeAlpha;
 @property(nonatomic,strong) UIColor *nativeColor;
 @property(nonatomic,strong) UIBackgroundConfiguration *nativeConfiguration;
@@ -30,9 +32,15 @@ static NSHashTable<UITableView *> *tables;
         _accessory.contentMode=_playing.contentMode=UIViewContentModeScaleAspectFit;
         _accessory.tintColor=_playing.tintColor=[UIColor colorWithWhite:1 alpha:.61];
         _title=[UILabel new]; _detail=[UILabel new]; _separator=[UIView new];
+        _explicitMark=[UILabel new]; _explicitMark.text=@"E"; _explicitMark.textAlignment=NSTextAlignmentCenter;
+        _explicitMark.backgroundColor=[UIColor colorWithWhite:1 alpha:.58]; _explicitMark.textColor=[UIColor colorWithWhite:.17 alpha:1];
+        _explicitMark.clipsToBounds=YES;
+        _progressTrack=[UIView new]; _progressFill=[UIView new];
+        _progressTrack.backgroundColor=[UIColor colorWithWhite:1 alpha:.23]; _progressFill.backgroundColor=UIColor.whiteColor;
+        _progressTrack.clipsToBounds=YES; [_progressTrack addSubview:_progressFill];
         _title.textColor=UIColor.whiteColor; _detail.textColor=[UIColor colorWithWhite:1 alpha:.68];
         _separator.backgroundColor=[UIColor colorWithWhite:1 alpha:.18];
-        for (UIView *view in @[_cover,_title,_detail,_accessory,_playing,_separator]) [self addSubview:view];
+        for (UIView *view in @[_cover,_title,_detail,_accessory,_playing,_explicitMark,_separator,_progressTrack]) [self addSubview:view];
         _playing.image=[UIImage systemImageNamed:@"waveform"];
     }
     return self;
@@ -40,19 +48,28 @@ static NSHashTable<UITableView *> *tables;
 - (void)layoutSubviews {
     [super layoutSubviews];
     CGFloat u=_unit, w=self.bounds.size.width, h=self.bounds.size.height;
-    CGFloat side=MIN(33*u,h-2*u), x=6*u, textX=x+side+6*u;
+    CGFloat side=MIN(33*u,h-2*u), x=6*u, textX=_cover.image ? x+side+6*u : x;
     _cover.frame=CGRectMake(x,(h-side)/2,side,side);
     _cover.layer.cornerRadius=4*u;
-    CGFloat right=w-7*u;
+    CGFloat right=w-7*u-_accessoryInset;
     _accessory.frame=CGRectMake(right-11*u,(h-11*u)/2,11*u,11*u);
     if (!_accessory.hidden) right-=17*u;
     _playing.frame=CGRectMake(right-12*u,(h-12*u)/2,12*u,12*u);
     if (!_playing.hidden) right-=15*u;
+    if (!_explicitMark.hidden) {
+        _explicitMark.frame=CGRectMake(right-8*u,(h-8*u)/2,8*u,8*u);
+        _explicitMark.layer.cornerRadius=1.4*u; _explicitMark.font=[UIFont systemFontOfSize:6*u weight:UIFontWeightBold];
+        right-=12*u;
+    }
     CGFloat textW=MAX(1,right-textX);
     _title.font=[UIFont systemFontOfSize:12.5*u weight:UIFontWeightMedium];
     _detail.font=[UIFont systemFontOfSize:9.2*u];
     _title.frame=CGRectMake(textX,_detail.hidden ? 0 : h/2-14*u,textW,_detail.hidden ? h : 16*u);
     _detail.frame=CGRectMake(textX,h/2+2*u,textW,12.5*u);
+    CGFloat progressWidth=MIN(textW,56*u);
+    _progressTrack.frame=CGRectMake(textX,h-3*u,progressWidth,1.4*u);
+    _progressTrack.layer.cornerRadius=.7*u;
+    _progressFill.frame=CGRectMake(0,0,progressWidth*_progress,1.4*u);
     _separator.frame=CGRectMake(textX,h-.6*u,MAX(0,w-textX),.6*u);
     self.backgroundColor=(_cell.highlighted || _cell.selected || _cell.focused) ?
         [UIColor colorWithWhite:1 alpha:.15] : UIColor.clearColor;
@@ -71,18 +88,50 @@ static void RestoreFace(UITableViewCell *cell) {
     objc_setAssociatedObject(cell,&faceKey,nil,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
-void CP26BrowseCellReused(UITableViewCell *cell) { RestoreFace(cell); }
+static void RestoreNativeRow(UITableViewCell *cell) {
+    NSDictionary *before=objc_getAssociatedObject(cell,&nativeRowKey);
+    if (!before) return;
+    cell.backgroundConfiguration=before[@"configuration"]==NSNull.null ? nil : before[@"configuration"];
+    cell.backgroundColor=before[@"color"]==NSNull.null ? nil : before[@"color"];
+    cell.opaque=[before[@"opaque"] boolValue];
+    objc_setAssociatedObject(cell,&nativeRowKey,nil,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+static void ClearNativeRow(UITableViewCell *cell) {
+    if (!objc_getAssociatedObject(cell,&nativeRowKey)) {
+        NSDictionary *before=@{@"configuration":(id)cell.backgroundConfiguration ?: NSNull.null,
+            @"color":(id)cell.backgroundColor ?: NSNull.null,@"opaque":@(cell.opaque)};
+        objc_setAssociatedObject(cell,&nativeRowKey,before,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    UIBackgroundConfiguration *bg=[UIBackgroundConfiguration clearConfiguration];
+    bg.backgroundColor=(cell.isFocused || cell.isSelected || cell.isHighlighted) ?
+        [UIColor colorWithWhite:1 alpha:.15] : UIColor.clearColor;
+    if (![cell.backgroundConfiguration isEqual:bg]) cell.backgroundConfiguration=bg;
+    cell.opaque=NO;
+    if (![cell.backgroundColor isEqual:UIColor.clearColor]) cell.backgroundColor=UIColor.clearColor;
+}
+void CP26BrowseCellReused(UITableViewCell *cell) { RestoreFace(cell); RestoreNativeRow(cell); }
 void CP26BrowseCellStateChanged(UITableViewCell *cell) {
     CP26ListFace *face=objc_getAssociatedObject(cell,&faceKey);
     [face setNeedsLayout];
+    if (objc_getAssociatedObject(cell,&nativeRowKey)) ClearNativeRow(cell);
+}
+
+static void SuppressNativePart(CP26ListFace *face, UIView *view, UIView *accessory) {
+    if (view==accessory || view==face) return;
+    if (accessory && [accessory isDescendantOfView:view]) {
+        for (UIView *child in view.subviews) SuppressNativePart(face,child,accessory);
+        return;
+    }
+    if (![face.nativeAlpha objectForKey:view]) [face.nativeAlpha setObject:@(view.alpha) forKey:view];
+    if (view.alpha!=0) view.alpha=0;
 }
 
 static void PaintFace(UITableViewCell *cell, CPListItem *item, NSUInteger tab, CGFloat u, BOOL last) {
     UIView *nativeAccessory=cell.accessoryView;
     BOOL separatelyActionable=([nativeAccessory isKindOfClass:UIControl.class] &&
         ((UIControl *)nativeAccessory).allControlEvents!=0) || nativeAccessory.gestureRecognizers.count>0;
-    if (!item.text.length || separatelyActionable || item.isExplicitContent ||
-        item.playbackProgress>0) { RestoreFace(cell); return; }
+    if (!item.text.length) { RestoreFace(cell); ClearNativeRow(cell); return; }
+    RestoreNativeRow(cell);
     CP26ListFace *face=objc_getAssociatedObject(cell,&faceKey);
     if (!face) {
         face=[[CP26ListFace alloc] initWithFrame:cell.bounds];
@@ -94,11 +143,15 @@ static void PaintFace(UITableViewCell *cell, CPListItem *item, NSUInteger tab, C
         [cell addSubview:face];
     }
     cell.opaque=NO; cell.backgroundColor=UIColor.clearColor;
-    for (UIView *v in cell.subviews) {
-        if (v==face || v==cell.selectedBackgroundView) continue;
-        if (![face.nativeAlpha objectForKey:v]) [face.nativeAlpha setObject:@(v.alpha) forKey:v];
-        if (v.alpha!=0) v.alpha=0;
+    UIView *action=separatelyActionable ? nativeAccessory : nil;
+    if (action) for (UIView *v in face.nativeAlpha.keyEnumerator.allObjects) {
+        if (v!=action && ![action isDescendantOfView:v] && ![v isDescendantOfView:action]) continue;
+        if (v.alpha==0) v.alpha=[face.nativeAlpha objectForKey:v].doubleValue;
+        [face.nativeAlpha removeObjectForKey:v];
     }
+    for (UIView *v in cell.subviews)
+        if (v!=face && v!=cell.selectedBackgroundView) SuppressNativePart(face,v,action);
+    face.accessoryInset=action ? MAX(0,cell.bounds.size.width-CGRectGetMinX([action convertRect:action.bounds toView:cell])) : 0;
     if (cell.subviews.lastObject!=face) [cell bringSubviewToFront:face];
     face.unit=u; face.frame=cell.bounds; face.cover.image=item.image ?: cell.imageView.image;
     face.title.text=item.text; face.detail.text=item.detailText; face.detail.hidden=!item.detailText.length;
@@ -108,11 +161,14 @@ static void PaintFace(UITableViewCell *cell, CPListItem *item, NSUInteger tab, C
         else if (item.accessoryType==CPListItemAccessoryTypeDisclosureIndicator || tab==2 || tab==3)
             accessory=[UIImage systemImageNamed:@"chevron.right"];
     }
-    face.accessory.image=accessory; face.accessory.hidden=!accessory;
+    face.accessory.image=accessory; face.accessory.hidden=action || !accessory;
     face.playing.hidden=!item.playing; face.separator.hidden=last;
     face.alpha=item.enabled ? 1 : .55;
-    cell.isAccessibilityElement=YES;
-    cell.accessibilityLabel=item.detailText.length ?
+    face.explicitMark.hidden=!item.isExplicitContent;
+    face.progress=isfinite(item.playbackProgress) ? MIN(1,MAX(0,item.playbackProgress)) : 0;
+    face.progressTrack.hidden=face.progress<=0;
+    cell.isAccessibilityElement=action ? face.nativeElement : YES;
+    cell.accessibilityLabel=action ? face.nativeLabel : item.detailText.length ?
         [NSString stringWithFormat:@"%@, %@",item.text,item.detailText] : item.text;
     [face setNeedsLayout];
 }
@@ -126,8 +182,9 @@ static void PaintFace(UITableViewCell *cell, CPListItem *item, NSUInteger tab, C
 @property(nonatomic,strong) NSMapTable<UIImageView *,NSValue *> *railTransforms;
 @property(nonatomic,strong) UIColor *tableColor;
 @property(nonatomic) UITableViewCellSeparatorStyle separators;
-@property(nonatomic) BOOL tableOpaque, applying;
+@property(nonatomic) BOOL tableOpaque, applying, resolvingRow;
 @property(nonatomic) NSUInteger tab;
+@property(nonatomic,strong) NSMapTable<UITableViewHeaderFooterView *,id> *headers;
 @property(nonatomic) CGFloat insetDelta, appliedInsetTop;
 @end
 @implementation CP26BrowseState
@@ -155,8 +212,11 @@ static void RestoreTable(UITableView *table) {
     CP26BrowseState *s=objc_getAssociatedObject(table,&browseKey);
     if (!s || s.applying) return;
     s.applying=YES;
-    for (UITableViewCell *cell in s.visible.allObjects) { RestoreFace(cell); RestoreAssistant(s,cell); }
+    for (UITableViewCell *cell in s.visible.allObjects) { CP26BrowseCellReused(cell); RestoreAssistant(s,cell); }
     for (UIImageView *image in s.railTransforms.keyEnumerator) image.transform=[s.railTransforms objectForKey:image].CGAffineTransformValue;
+    for (UITableViewHeaderFooterView *header in s.headers.keyEnumerator) {
+        id old=[s.headers objectForKey:header]; header.backgroundConfiguration=old==NSNull.null ? nil : old;
+    }
     HeaderInset(s,0);
     [s.geometry restore];
     if (table.backgroundView==s.canvas) table.backgroundView=s.originalBackground;
@@ -192,6 +252,7 @@ void CP26UpdateBrowseTable(UITableView *table, NSUInteger tab, BOOL compactHeade
         s.canvas=CP26ReferenceCanvas(); s.underlay=CP26ReferenceCanvas();
         s.railTransforms=[NSMapTable weakToStrongObjectsMapTable]; s.visible=[NSHashTable weakObjectsHashTable];
         s.assistantBackgrounds=[NSMapTable weakToStrongObjectsMapTable];
+        s.headers=[NSMapTable weakToStrongObjectsMapTable];
         objc_setAssociatedObject(table,&browseKey,s,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         if (!tables) tables=[NSHashTable weakObjectsHashTable]; [tables addObject:table];
         if (tab>0) {
@@ -248,7 +309,7 @@ void CP26UpdateBrowseTable(UITableView *table, NSUInteger tab, BOOL compactHeade
     }
     NSArray *visibleCells=table.visibleCells;
     for (UITableViewCell *cell in s.visible.allObjects) if (![visibleCells containsObject:cell]) {
-        RestoreFace(cell); RestoreAssistant(s,cell); [s.visible removeObject:cell];
+        CP26BrowseCellReused(cell); RestoreAssistant(s,cell); [s.visible removeObject:cell];
         [s.geometry restoreView:cell];
     }
     for (UITableViewCell *cell in visibleCells) {
@@ -257,7 +318,7 @@ void CP26UpdateBrowseTable(UITableView *table, NSUInteger tab, BOOL compactHeade
             CGRect frame=cell.frame; frame.origin.x=0; frame.size.width=wrapper.bounds.size.width;
             [s.geometry place:cell in:wrapper rect:frame];
         }
-        if (tab==0) continue;
+        if (tab==0) { RestoreNativeRow(cell); continue; }
         NSIndexPath *path=[table indexPathForCell:cell];
         id item=path ? CP26BrowseModel(table,path) : nil;
         if ([item isKindOfClass:CPListItem.class]) {
@@ -272,10 +333,39 @@ void CP26UpdateBrowseTable(UITableView *table, NSUInteger tab, BOOL compactHeade
                 UIBackgroundConfiguration *bg=[UIBackgroundConfiguration clearConfiguration];
                 bg.backgroundColor=[UIColor colorWithWhite:1 alpha:.13]; bg.cornerRadius=16*u;
                 if (![cell.backgroundConfiguration isEqual:bg]) cell.backgroundConfiguration=bg;
-            } else RestoreAssistant(s,cell);
+            } else { RestoreAssistant(s,cell); if (tab==CP26BrowseDetail) ClearNativeRow(cell); }
+        }
+    }
+    if (tab==CP26BrowseDetail) {
+        for (NSIndexPath *path in table.indexPathsForVisibleRows) {
+            UITableViewHeaderFooterView *header=[table headerViewForSection:path.section];
+            if (!header) continue;
+            if (![s.headers objectForKey:header]) [s.headers setObject:(id)header.backgroundConfiguration ?: NSNull.null forKey:header];
+            UIBackgroundConfiguration *clear=[UIBackgroundConfiguration clearConfiguration];
+            if (![header.backgroundConfiguration isEqual:clear]) header.backgroundConfiguration=clear;
         }
     }
     s.applying=NO;
+}
+NSIndexPath *CP26BrowsePathAtPoint(UITableView *t, CGPoint p, NSIndexPath *native) {
+    CP26BrowseState *s=objc_getAssociatedObject(t,&browseKey);
+    if (!s || s.applying || s.resolvingRow || s.tab==0 || !CGRectContainsPoint(t.bounds,p)) return native;
+    for (UITableViewHeaderFooterView *header in s.headers.keyEnumerator)
+        if (header.window && !header.hidden && CGRectContainsPoint(header.bounds,[header convertPoint:p fromView:t])) return native;
+    // Keep UIKit's vertical row lookup and block selection in the scroll rail.
+    // The visible native cells may be wider than the original wrapper.
+    for (UITableViewCell *cell in s.visible.allObjects) {
+        if (cell.hidden || !cell.window || !objc_getAssociatedObject(cell,&faceKey)) continue;
+        CGRect box=[cell convertRect:cell.bounds toView:t];
+        if (p.y<CGRectGetMinY(box) || p.y>=CGRectGetMaxY(box)) continue;
+        if (!CGRectContainsPoint(box,p)) return nil;
+        if (native) return native;
+        s.resolvingRow=YES;
+        NSIndexPath *path=[t indexPathForCell:cell];
+        s.resolvingRow=NO;
+        return path;
+    }
+    return native;
 }
 BOOL CP26BrowseHasCanvas(UIWindow *window) {
     for (UITableView *table in tables.allObjects) {
@@ -296,6 +386,7 @@ void CP26BrowseReport(NSMutableString *report) {
         if (!t.window || !s) continue;
         NSUInteger painted=0;
         for (UITableViewCell *cell in t.visibleCells) if (objc_getAssociatedObject(cell,&faceKey)) painted++;
+        for (UITableViewCell *cell in t.visibleCells) CP26ReportHit(report,@"browse row",cell);
         [report appendFormat:@"BROWSE tab=%lu viewport=%@ topInset=%.1f visibleRows=%lu styledListRows=%lu assistantRows=%lu\n",
             (unsigned long)s.tab,NSStringFromCGRect([t convertRect:t.bounds toView:t.window]),t.adjustedContentInset.top,
             (unsigned long)t.visibleCells.count,(unsigned long)painted,(unsigned long)s.assistantBackgrounds.count];

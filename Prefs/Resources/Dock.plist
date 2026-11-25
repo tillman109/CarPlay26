@@ -26,7 +26,7 @@
 			<key>cellClass</key>
 			<string>CP26InfoSwitchCell</string>
 			<key>CP26Help</key>
-			<string>Gives the CarPlay dock a rounded glass background around the clock, app shortcuts and status icons. Restart CarPlay Services to apply</string>
+			<string>Uses the compact glass dock across apps, the Dashboard and the app grid on displays with a bottom dock. Hides the Settings shortcut in the dock. Restart CarPlay Services to apply</string>
 		</dict>
 		<dict>
 			<key>cell</key>

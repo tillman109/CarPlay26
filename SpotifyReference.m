@@ -70,6 +70,30 @@ static UIImage *BackdropField(void) {
 
 UIView *CP26ReferenceCanvas(void) { return [CP26ReferenceBackdrop new]; }
 
+UIView *CP26HitVisibleControl(UIView *v, UIView *space, CGPoint point, UIEvent *event) {
+    UIWindow *window=[space isKindOfClass:UIWindow.class] ? (UIWindow *)space : space.window;
+    if (!v || !v.window || v.window!=window || !v.userInteractionEnabled) return nil;
+    for (UIView *a=v; a; a=a.superview) {
+        if (a.hidden || a.alpha<=.01 || !a.userInteractionEnabled) return nil;
+    }
+    CGPoint local=[v convertPoint:point fromView:space];
+    return CGRectContainsPoint(v.bounds,local) ? [v hitTest:local withEvent:event] : nil;
+}
+void CP26ReportHit(NSMutableString *out, NSString *role, UIView *v) {
+    UIWindow *w=v.window;
+    if (!w || v.hidden || CGRectIsEmpty(v.bounds)) return;
+    CGRect box=[v convertRect:v.bounds toView:w];
+    const CGPoint samples[]={{.5,.5},{.18,.5},{.82,.5}};
+    unsigned hits=0;
+    for (NSUInteger i=0;i<3;i++) {
+        CGPoint p=CGPointMake(box.origin.x+box.size.width*samples[i].x,box.origin.y+box.size.height*samples[i].y);
+        UIView *hit=[w hitTest:p withEvent:nil];
+        if (hit==v || [hit isDescendantOfView:v]) hits|=1<<i;
+    }
+    [out appendFormat:@"HIT %@ frame=%@ centre=%d left=%d right=%d\n",role,NSStringFromCGRect(box),
+        !!(hits&1),!!(hits&2),!!(hits&4)];
+}
+
 static char glassKey;
 void CP26GlassPill(UIView *view, CGFloat radius) {
     if (!view) return;

@@ -14,6 +14,7 @@ void CP26HomeInvalidateRow(UITableViewCell *cell);
 void CP26HomeRestoreRow(UITableViewCell *cell);
 NSArray *CP26HomeFocusTargets(UITableViewCell *cell);
 void CP26HomeNativeSelection(UITableView *table);
+UIView *CP26HomeHit(UITableView *table, CGPoint point, UIEvent *event, UIView *native);
 void CP26HomeAppendReport(NSMutableString *report);
 #ifdef __cplusplus
 }

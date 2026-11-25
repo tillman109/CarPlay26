@@ -18,6 +18,14 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
+			<string>v0.2.70 — Spotify touch targets and shared dock</string>
+			<key>footerText</key>
+			<string>Centres artwork and playback buttons over the blurred album background, aligns touch targets with their visible controls, styles pushed Spotify lists, and applies the compact bottom dock across CarPlay with Settings removed from the dock</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
 			<string>v0.2.69 — Spotify portrait layout</string>
 			<key>footerText</key>
 			<string>Compact tabs and a working Now Playing bar on all four browse screens, translucent list styling, measured Home shelves, full-player artwork blur and a smaller glass dock with native app shortcuts</string>

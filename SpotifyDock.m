@@ -2,47 +2,19 @@
 #import <objc/runtime.h>
 #import <QuartzCore/QuartzCore.h>
 
-// Observed on the user's 16.4.1 dock, including the native button action and
-// CarPlaySettings bundle. Session visibility is checked before adding a slot.
-@protocol CP26DockAPI <NSObject>
-@optional
-- (id)iconProvider;
-- (id)appHistory;
-- (BOOL)isDockEnabled;
-- (id)appDockViewControllerDelegate;
-- (void)appDockViewController:(id)owner didSelectBundleID:(NSString *)identifier;
-- (BOOL)applicationVisibleInCarPlay:(NSString *)identifier withIconProvider:(id)provider;
-- (BOOL)isBundleIdentifierValidForDock:(NSString *)identifier;
-- (instancetype)initWithIconProvider:(id)provider;
-- (void)setBundleIdentifier:(NSString *)identifier animated:(BOOL)animated;
+@protocol CP26DockApp <NSObject>
 - (NSString *)bundleIdentifier;
-- (void)_dockButtonPressed:(UIControl *)sender;
-- (UIStackView *)dockItemStackView;
-- (UIControl *)otherAppButton;
 @end
 
 @interface CP26DockState : NSObject
 @property(nonatomic,strong) NSMapTable<UIView *,NSValue *> *applied;
 @property(nonatomic,strong) NSHashTable<UIView *> *touched;
-@property(nonatomic,strong) UIControl *fourth, *phone;
-@property(nonatomic,weak) UIControl *covered;
-@property(nonatomic) CGFloat previousAlpha;
-@property(nonatomic,weak) id<CP26DockAPI> owner;
-- (void)openSlot:(UIControl *)sender;
+@property(nonatomic,strong) NSMapTable<UIView *,NSNumber *> *hiddenSettings;
+@property(nonatomic,weak) UIStackView *stack;
+@property(nonatomic,weak) UIControl *home;
+@property(nonatomic) CGRect surface;
 @end
 @implementation CP26DockState
-- (void)openSlot:(UIControl *)sender {
-    id<CP26DockAPI> owner=self.owner;
-    if (!sender.window || !owner || (sender!=self.fourth && sender!=self.phone) ||
-        ([owner respondsToSelector:@selector(isDockEnabled)] && !owner.isDockEnabled)) return;
-    NSString *identifier=[(id<CP26DockAPI>)sender bundleIdentifier];
-    if (!identifier.length) return;
-    id<CP26DockAPI> delegate=[owner respondsToSelector:@selector(appDockViewControllerDelegate)] ?
-        owner.appDockViewControllerDelegate : nil;
-    if ([delegate respondsToSelector:@selector(appDockViewController:didSelectBundleID:)])
-        [delegate appDockViewController:owner didSelectBundleID:identifier];
-    else if ([owner respondsToSelector:@selector(_dockButtonPressed:)]) [owner _dockButtonPressed:sender];
-}
 @end
 static char stateKey;
 
@@ -62,61 +34,27 @@ static void RestoreMove(CP26DockState *s, UIView *v) {
     if (prior && CGAffineTransformEqualToTransform(v.transform,prior.CGAffineTransformValue)) v.transform=CGAffineTransformIdentity;
     [s.applied removeObjectForKey:v];
 }
-static void RevealOther(CP26DockState *s) {
-    if (s.covered && s.covered.alpha==0) s.covered.alpha=s.previousAlpha;
-    s.covered=nil;
-}
-static void RemoveSlots(CP26DockState *s) {
-    RevealOther(s); [s.fourth removeFromSuperview]; [s.phone removeFromSuperview];
-    s.fourth=nil; s.phone=nil;
-}
-static UIControl *NewSlot(CP26DockState *s, NSString *identifier, NSString *label) {
-    id<CP26DockAPI> owner=s.owner;
-    if (![owner respondsToSelector:@selector(iconProvider)] || ![owner respondsToSelector:@selector(appHistory)] ||
-        ![owner respondsToSelector:@selector(_dockButtonPressed:)]) return nil;
-    id provider=owner.iconProvider; id<CP26DockAPI> history=owner.appHistory;
-    if (!provider || !history) return nil;
-    BOOL allowed=NO;
-    if ([history respondsToSelector:@selector(applicationVisibleInCarPlay:withIconProvider:)])
-        allowed=[history applicationVisibleInCarPlay:identifier withIconProvider:provider];
-    else if ([history respondsToSelector:@selector(isBundleIdentifierValidForDock:)])
-        allowed=[history isBundleIdentifierValidForDock:identifier];
-    if (!allowed) return nil;
-    Class cls=NSClassFromString(@"DBAppDockButton");
-    if (![cls instancesRespondToSelector:@selector(initWithIconProvider:)] ||
-        ![cls instancesRespondToSelector:@selector(setBundleIdentifier:animated:)]) return nil;
-    UIControl *slot=(UIControl *)[(id<CP26DockAPI>)[cls alloc] initWithIconProvider:provider];
-    if (![slot isKindOfClass:UIControl.class]) return nil;
-    [(id<CP26DockAPI>)slot setBundleIdentifier:identifier animated:NO];
-    [slot addTarget:s action:@selector(openSlot:) forControlEvents:UIControlEventTouchUpInside];
-    slot.accessibilityLabel=label;
-    return slot;
-}
-static void PlaceSlot(UIControl *slot, UIView *root, CGPoint center, CGFloat scale) {
-    if (!slot) return;
-    if (slot.superview!=root) [root addSubview:slot];
-    CGRect bounds=CGRectMake(0,0,37,45);
-    if (!CGRectEqualToRect(slot.bounds,bounds)) slot.bounds=bounds;
-    if (!CGPointEqualToPoint(slot.center,center)) slot.center=center;
-    CGAffineTransform t=CGAffineTransformMakeScale(scale,scale);
-    if (!CGAffineTransformEqualToTransform(slot.transform,t)) slot.transform=t;
-}
-static id<CP26DockAPI> DockOwner(UIView *root) {
-    // The two siblings inserted by this tweak are never used for discovery.
-    for (UIView *container in root.subviews) for (UIView *view in container.subviews) {
-        if (![view isKindOfClass:UIStackView.class]) continue;
-        for (UIControl *button in ((UIStackView *)view).arrangedSubviews) {
-            if (![button isKindOfClass:NSClassFromString(@"DBAppDockButton")]) continue;
-            for (id target in button.allTargets) if ([target isKindOfClass:NSClassFromString(@"DBAppDockViewController")]) return target;
-        }
+static UIStackView *AppStack(UIView *root) {
+    Class button=NSClassFromString(@"DBAppDockButton");
+    for (UIView *container in root.subviews) for (UIView *v in container.subviews) {
+        if (![v isKindOfClass:UIStackView.class]) continue;
+        UIStackView *stack=(UIStackView *)v;
+        if (stack.arrangedSubviews.count && [stack.arrangedSubviews.firstObject isKindOfClass:button]) return stack;
     }
     return nil;
 }
+static void RestoreVisibility(CP26DockState *s, UIView *v) {
+    NSNumber *old=[s.hiddenSettings objectForKey:v];
+    if (old) {
+        if (v.hidden) v.hidden=old.boolValue;
+        [s.hiddenSettings removeObjectForKey:v];
+    }
+}
 static void StatusItems(CP26DockState *s, UIView *v, UIView *root, CGFloat cy, CGFloat u, NSUInteger depth) {
-    if (depth>6 || v==s.fourth || v==s.phone) return;
+    if (depth>6) return;
     NSString *name=NSStringFromClass(v.class);
     if ([name isEqualToString:@"DBStatusBarHomeButton"]) {
-        Move(s,v,root,CGPointMake(19.5*u,cy),.78*u); return;
+        s.home=(UIControl *)v; Move(s,v,root,CGPointMake(19.5*u,cy),.78*u); return;
     }
     if ([name isEqualToString:@"_UIStatusBarForegroundView"]) {
         for (UIView *part in v.subviews) {
@@ -139,49 +77,57 @@ void CP26ReferenceDock(UIWindow *window, UIView *root, CGRect surface, BOOL enab
     CP26DockState *s=objc_getAssociatedObject(window,&stateKey);
     if (!enabled || !root || CGRectIsEmpty(surface)) {
         if (!s) return;
-        RemoveSlots(s);
+        for (UIView *v in s.hiddenSettings.keyEnumerator.allObjects) RestoreVisibility(s,v);
         for (UIView *v in s.applied.keyEnumerator.allObjects) RestoreMove(s,v);
         objc_setAssociatedObject(window,&stateKey,nil,OBJC_ASSOCIATION_RETAIN_NONATOMIC); return;
     }
     if (!s) {
         s=[CP26DockState new]; s.applied=[NSMapTable weakToStrongObjectsMapTable]; s.touched=[NSHashTable weakObjectsHashTable];
+        s.hiddenSettings=[NSMapTable weakToStrongObjectsMapTable];
         objc_setAssociatedObject(window,&stateKey,s,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
     [s.touched removeAllObjects];
-    CGFloat u=root.bounds.size.width/400, cy=CGRectGetMidY(surface);
-    id<CP26DockAPI> owner=DockOwner(root);
-    if (s.owner!=owner) { RemoveSlots(s); s.owner=owner; }
-    UIStackView *stack=[owner respondsToSelector:@selector(dockItemStackView)] ? owner.dockItemStackView : nil;
-    UIView *group=stack.superview;
-    if (stack.arrangedSubviews.count==3 && group.superview==root && group.bounds.size.width>=75) {
-        NSString *settings=@"com.apple.CarPlaySettings", *phone=@"com.apple.mobilephone";
-        UIControl *other=[owner respondsToSelector:@selector(otherAppButton)] ? owner.otherAppButton : nil;
-        NSString *current=[other respondsToSelector:@selector(bundleIdentifier)] ? [(id<CP26DockAPI>)other bundleIdentifier] : nil;
-        BOOL pinned=CFPreferencesGetAppBooleanValue(CFSTR("PinDockApp"),CFSTR("com.tillman109.carplay26"),NULL);
-        BOOL needsPhone=!pinned && current && ![current isEqualToString:phone];
-        if (needsPhone && !s.phone) s.phone=NewSlot(s,phone,@"Phone");
-        if (!needsPhone) { RevealOther(s); [s.phone removeFromSuperview]; s.phone=nil; }
-        BOOL needsSettings=s.phone || ![current isEqualToString:settings];
-        if (needsSettings && !s.fourth) s.fourth=NewSlot(s,settings,@"Settings");
-        if (!needsSettings) { [s.fourth removeFromSuperview]; s.fourth=nil; }
-        CGFloat cx=(s.fourth ? 186.2 : 200)*u, scale=.765*u;
-        Move(s,group,root,CGPointMake(cx,cy),scale);
-        if (s.phone && other) {
-            if (s.covered!=other) { RevealOther(s); s.covered=other; s.previousAlpha=other.alpha; }
-            if (other.alpha!=0) other.alpha=0;
-            PlaceSlot(s.phone,root,CGPointMake(cx+28.2*u,cy),scale);
-        }
-        PlaceSlot(s.fourth,root,CGPointMake(cx+56.4*u,cy),scale);
-    } else {
-        RemoveSlots(s);
-        if (stack.arrangedSubviews.count==4 && group.superview==root)
-            Move(s,group,root,CGPointMake(200*u,cy),.765*u);
+    CGFloat u=MIN(root.bounds.size.width/400,root.bounds.size.height/45), cy=CGRectGetMidY(surface);
+    s.surface=[root convertRect:surface toView:window];
+    s.stack=AppStack(root); s.home=nil;
+    for (UIView *v in s.hiddenSettings.keyEnumerator.allObjects)
+        if (![s.stack.arrangedSubviews containsObject:v]) RestoreVisibility(s,v);
+    for (UIView *v in s.stack.arrangedSubviews) {
+        if (![v respondsToSelector:@selector(bundleIdentifier)]) continue;
+        NSString *identifier=[(id<CP26DockApp>)v bundleIdentifier];
+        if ([identifier isEqualToString:@"com.apple.CarPlaySettings"]) {
+            if (![s.hiddenSettings objectForKey:v]) [s.hiddenSettings setObject:@(v.hidden) forKey:v];
+            if (!v.hidden) v.hidden=YES;
+        } else RestoreVisibility(s,v);
     }
+    UIView *group=s.stack.superview;
+    if (group.superview==root && group.bounds.size.width>0)
+        Move(s,group,root,CGPointMake(CGRectGetMidX(root.bounds),cy),.765*u);
     StatusItems(s,root,root,cy,u,0);
     for (UIView *v in s.applied.keyEnumerator.allObjects) if (![s.touched containsObject:v]) RestoreMove(s,v);
 }
-void CP26DockReport(UIWindow *window, NSMutableString *out) {
-    CP26DockState *s=objc_getAssociatedObject(window,&stateKey);
-    if (s) [out appendFormat:@"SPOTIFY_DOCK nativeGroup=%d settingsShortcut=%d phoneShortcut=%d adjustedStatusViews=%lu\n",
-        s.owner!=nil,s.fourth.superview!=nil,s.phone.superview!=nil,(unsigned long)s.applied.count];
+UIView *CP26DockHit(UIWindow *w, CGPoint p, UIEvent *event, UIView *native) {
+    CP26DockState *s=objc_getAssociatedObject(w,&stateKey);
+    if (!s || w.hidden || !w.userInteractionEnabled) return native;
+    if (!CGRectContainsPoint(s.surface,p)) return nil;
+    // Preserve native overlays and the simulator's independent expand control.
+    for (UIView *v=native; v && v!=w; v=v.superview)
+        if ([v isKindOfClass:UIControl.class] && v!=s.home && (!s.stack || ![v isDescendantOfView:s.stack])) return native;
+    for (UIView *v in s.stack.arrangedSubviews) {
+        UIView *hit=CP26HitVisibleControl(v,w,p,event);
+        if (hit) return hit;
+    }
+    UIView *home=CP26HitVisibleControl(s.home,w,p,event);
+    if (home) return home;
+    if (native && ((s.home && [native isDescendantOfView:s.home]) ||
+        (s.stack && [native isDescendantOfView:s.stack]))) return nil;
+    return native;
+}
+void CP26DockReport(UIWindow *w, NSMutableString *out) {
+    CP26DockState *s=objc_getAssociatedObject(w,&stateKey);
+    if (!s) return;
+    [out appendFormat:@"COMPACT_DOCK surface=%@ hiddenSettings=%lu\n",NSStringFromCGRect(s.surface),
+        (unsigned long)s.hiddenSettings.count];
+    CP26ReportHit(out,@"dock home",s.home);
+    for (UIView *v in s.stack.arrangedSubviews) if (!v.hidden) CP26ReportHit(out,@"dock app",v);
 }

@@ -30,7 +30,7 @@
 			<key>cellClass</key>
 			<string>CP26InfoSwitchCell</string>
 			<key>CP26Help</key>
-			<string>Matches the portrait reference across Home, Recents, Search, Library and the full player. The Glass Dock switch also applies the compact dock while Spotify is open. Tap a Home shelf heading or hold a shortcut to open its full list</string>
+			<string>Styles all four portrait tabs, their nested lists and the full player. Tap a Home shelf heading or hold a shortcut to open its full list</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -50,7 +50,7 @@
 			<key>cellClass</key>
 			<string>CP26InfoSwitchCell</string>
 			<key>CP26Help</key>
-			<string>Places the four native tabs on the left and the current Spotify track on the right. Tap the artwork or title for Now Playing, or use the play/pause and next buttons</string>
+			<string>Places the four native tabs on the left and the current Spotify track on the right. Nested menus with a Now Playing shortcut also show the player. Tap the artwork or title for Now Playing, or use the play/pause and next buttons</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -72,7 +72,7 @@
 			<key>cellClass</key>
 			<string>CP26InfoSwitchCell</string>
 			<key>CP26Help</key>
-			<string>Automatically captures a layout report the next time the CarPlay template host launches. The report records layout measurements and control counts. For a one-time capture with the Spotify screen to inspect visible, tap Capture Spotify Layout Report</string>
+			<string>Automatically captures a layout report the next time the CarPlay template host launches. The report records layout measurements and checks which controls receive hits at their centre and sides. For a one-time capture with the Spotify screen to inspect visible, tap Capture Spotify Layout Report</string>
 		</dict>
 		<dict>
 			<key>cell</key>
