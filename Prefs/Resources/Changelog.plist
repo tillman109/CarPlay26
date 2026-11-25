@@ -18,6 +18,22 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
+			<string>v0.2.69 — Spotify portrait layout</string>
+			<key>footerText</key>
+			<string>Compact tabs and a working Now Playing bar on all four browse screens, translucent list styling, measured Home shelves, full-player artwork blur and a smaller glass dock with native app shortcuts</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.68 — Spotify reference styling</string>
+			<key>footerText</key>
+			<string>Centres the four native Spotify tabs in a compact teal pill, adjusts shelf captions and spacing, and tints the enabled dark glass dock blue while Spotify is foreground. Reads missing mix titles from legible cover text and shows available artist names beneath the artwork.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
 			<string>v0.2.67 — Liked Songs shortcut</string>
 			<key>footerText</key>
 			<string>Supplies the Liked Songs shortcut title when its confirmed heart artwork is present and Spotify provides no readable caption.</string>

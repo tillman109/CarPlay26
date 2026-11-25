@@ -1,0 +1,303 @@
+#import "SpotifyReference.h"
+#import <CarPlay/CarPlay.h>
+#import <objc/runtime.h>
+#import <QuartzCore/QuartzCore.h>
+
+static char browseKey, faceKey;
+static NSHashTable<UITableView *> *tables;
+
+@interface CP26ListFace : UIView
+@property(nonatomic,strong) UIImageView *cover, *accessory, *playing;
+@property(nonatomic,strong) UILabel *title, *detail;
+@property(nonatomic,strong) UIView *separator;
+@property(nonatomic,strong) NSMapTable<UIView *,NSNumber *> *nativeAlpha;
+@property(nonatomic,strong) UIColor *nativeColor;
+@property(nonatomic,strong) UIBackgroundConfiguration *nativeConfiguration;
+@property(nonatomic) BOOL nativeOpaque, nativeElement;
+@property(nonatomic,copy) NSString *nativeLabel;
+@property(nonatomic,weak) UITableViewCell *cell;
+@property(nonatomic) CGFloat unit;
+@end
+
+@implementation CP26ListFace
+- (instancetype)initWithFrame:(CGRect)frame {
+    if ((self=[super initWithFrame:frame])) {
+        self.userInteractionEnabled=NO;
+        self.accessibilityElementsHidden=YES;
+        _nativeAlpha=[NSMapTable weakToStrongObjectsMapTable];
+        _cover=[UIImageView new]; _accessory=[UIImageView new]; _playing=[UIImageView new];
+        _cover.contentMode=UIViewContentModeScaleAspectFill; _cover.clipsToBounds=YES;
+        _accessory.contentMode=_playing.contentMode=UIViewContentModeScaleAspectFit;
+        _accessory.tintColor=_playing.tintColor=[UIColor colorWithWhite:1 alpha:.61];
+        _title=[UILabel new]; _detail=[UILabel new]; _separator=[UIView new];
+        _title.textColor=UIColor.whiteColor; _detail.textColor=[UIColor colorWithWhite:1 alpha:.68];
+        _separator.backgroundColor=[UIColor colorWithWhite:1 alpha:.18];
+        for (UIView *view in @[_cover,_title,_detail,_accessory,_playing,_separator]) [self addSubview:view];
+        _playing.image=[UIImage systemImageNamed:@"waveform"];
+    }
+    return self;
+}
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    CGFloat u=_unit, w=self.bounds.size.width, h=self.bounds.size.height;
+    CGFloat side=MIN(33*u,h-2*u), x=6*u, textX=x+side+6*u;
+    _cover.frame=CGRectMake(x,(h-side)/2,side,side);
+    _cover.layer.cornerRadius=4*u;
+    CGFloat right=w-7*u;
+    _accessory.frame=CGRectMake(right-11*u,(h-11*u)/2,11*u,11*u);
+    if (!_accessory.hidden) right-=17*u;
+    _playing.frame=CGRectMake(right-12*u,(h-12*u)/2,12*u,12*u);
+    if (!_playing.hidden) right-=15*u;
+    CGFloat textW=MAX(1,right-textX);
+    _title.font=[UIFont systemFontOfSize:12.5*u weight:UIFontWeightMedium];
+    _detail.font=[UIFont systemFontOfSize:9.2*u];
+    _title.frame=CGRectMake(textX,_detail.hidden ? 0 : h/2-14*u,textW,_detail.hidden ? h : 16*u);
+    _detail.frame=CGRectMake(textX,h/2+2*u,textW,12.5*u);
+    _separator.frame=CGRectMake(textX,h-.6*u,MAX(0,w-textX),.6*u);
+    self.backgroundColor=(_cell.highlighted || _cell.selected || _cell.focused) ?
+        [UIColor colorWithWhite:1 alpha:.15] : UIColor.clearColor;
+}
+@end
+
+static void RestoreFace(UITableViewCell *cell) {
+    CP26ListFace *face=objc_getAssociatedObject(cell,&faceKey);
+    if (!face) return;
+    for (UIView *view in face.nativeAlpha.keyEnumerator)
+        if (view.alpha==0) view.alpha=[face.nativeAlpha objectForKey:view].doubleValue;
+    cell.backgroundConfiguration=face.nativeConfiguration;
+    cell.backgroundColor=face.nativeColor; cell.opaque=face.nativeOpaque;
+    cell.isAccessibilityElement=face.nativeElement; cell.accessibilityLabel=face.nativeLabel;
+    [face removeFromSuperview];
+    objc_setAssociatedObject(cell,&faceKey,nil,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+void CP26BrowseCellReused(UITableViewCell *cell) { RestoreFace(cell); }
+void CP26BrowseCellStateChanged(UITableViewCell *cell) {
+    CP26ListFace *face=objc_getAssociatedObject(cell,&faceKey);
+    [face setNeedsLayout];
+}
+
+static void PaintFace(UITableViewCell *cell, CPListItem *item, NSUInteger tab, CGFloat u, BOOL last) {
+    UIView *nativeAccessory=cell.accessoryView;
+    BOOL separatelyActionable=([nativeAccessory isKindOfClass:UIControl.class] &&
+        ((UIControl *)nativeAccessory).allControlEvents!=0) || nativeAccessory.gestureRecognizers.count>0;
+    if (!item.text.length || separatelyActionable || item.isExplicitContent ||
+        item.playbackProgress>0) { RestoreFace(cell); return; }
+    CP26ListFace *face=objc_getAssociatedObject(cell,&faceKey);
+    if (!face) {
+        face=[[CP26ListFace alloc] initWithFrame:cell.bounds];
+        face.cell=cell; face.nativeColor=cell.backgroundColor; face.nativeOpaque=cell.opaque;
+        face.nativeElement=cell.isAccessibilityElement; face.nativeLabel=cell.accessibilityLabel;
+        face.nativeConfiguration=cell.backgroundConfiguration;
+        objc_setAssociatedObject(cell,&faceKey,face,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        cell.backgroundConfiguration=[UIBackgroundConfiguration clearConfiguration];
+        [cell addSubview:face];
+    }
+    cell.opaque=NO; cell.backgroundColor=UIColor.clearColor;
+    for (UIView *v in cell.subviews) {
+        if (v==face || v==cell.selectedBackgroundView) continue;
+        if (![face.nativeAlpha objectForKey:v]) [face.nativeAlpha setObject:@(v.alpha) forKey:v];
+        if (v.alpha!=0) v.alpha=0;
+    }
+    if (cell.subviews.lastObject!=face) [cell bringSubviewToFront:face];
+    face.unit=u; face.frame=cell.bounds; face.cover.image=item.image ?: cell.imageView.image;
+    face.title.text=item.text; face.detail.text=item.detailText; face.detail.hidden=!item.detailText.length;
+    UIImage *accessory=item.accessoryImage;
+    if (!accessory) {
+        if (item.accessoryType==CPListItemAccessoryTypeCloud) accessory=[UIImage systemImageNamed:@"icloud"];
+        else if (item.accessoryType==CPListItemAccessoryTypeDisclosureIndicator || tab==2 || tab==3)
+            accessory=[UIImage systemImageNamed:@"chevron.right"];
+    }
+    face.accessory.image=accessory; face.accessory.hidden=!accessory;
+    face.playing.hidden=!item.playing; face.separator.hidden=last;
+    face.alpha=item.enabled ? 1 : .55;
+    cell.isAccessibilityElement=YES;
+    cell.accessibilityLabel=item.detailText.length ?
+        [NSString stringWithFormat:@"%@, %@",item.text,item.detailText] : item.text;
+    [face setNeedsLayout];
+}
+
+@interface CP26BrowseState : NSObject
+@property(nonatomic,weak) UITableView *table;
+@property(nonatomic,strong) UIView *canvas, *originalBackground, *underlay;
+@property(nonatomic,strong) CP26PlacedViews *geometry;
+@property(nonatomic,strong) NSHashTable<UITableViewCell *> *visible;
+@property(nonatomic,strong) NSMapTable<UITableViewCell *,id> *assistantBackgrounds;
+@property(nonatomic,strong) NSMapTable<UIImageView *,NSValue *> *railTransforms;
+@property(nonatomic,strong) UIColor *tableColor;
+@property(nonatomic) UITableViewCellSeparatorStyle separators;
+@property(nonatomic) BOOL tableOpaque, applying;
+@property(nonatomic) NSUInteger tab;
+@property(nonatomic) CGFloat insetDelta, appliedInsetTop;
+@end
+@implementation CP26BrowseState
+@end
+
+static void HeaderInset(CP26BrowseState *s, CGFloat delta) {
+    UITableView *t=s.table;
+    if (s.insetDelta!=0 && fabs(t.contentInset.top-s.appliedInsetTop)>.1) s.insetDelta=0;
+    if (fabs(delta-s.insetDelta)<.1) return;
+    CGFloat oldTop=t.adjustedContentInset.top;
+    BOOL atTop=!t.tracking && !t.decelerating && fabs(t.contentOffset.y+oldTop)<1.5;
+    UIEdgeInsets inset=t.contentInset; inset.top+=delta-s.insetDelta;
+    s.insetDelta=delta; s.appliedInsetTop=inset.top; t.contentInset=inset;
+    if (atTop) t.contentOffset=CGPointMake(t.contentOffset.x,-t.adjustedContentInset.top);
+}
+
+static void RestoreAssistant(CP26BrowseState *s, UITableViewCell *cell) {
+    id original=[s.assistantBackgrounds objectForKey:cell];
+    if (original) {
+        cell.backgroundConfiguration=original==NSNull.null ? nil : original;
+        [s.assistantBackgrounds removeObjectForKey:cell];
+    }
+}
+static void RestoreTable(UITableView *table) {
+    CP26BrowseState *s=objc_getAssociatedObject(table,&browseKey);
+    if (!s || s.applying) return;
+    s.applying=YES;
+    for (UITableViewCell *cell in s.visible.allObjects) { RestoreFace(cell); RestoreAssistant(s,cell); }
+    for (UIImageView *image in s.railTransforms.keyEnumerator) image.transform=[s.railTransforms objectForKey:image].CGAffineTransformValue;
+    HeaderInset(s,0);
+    [s.geometry restore];
+    if (table.backgroundView==s.canvas) table.backgroundView=s.originalBackground;
+    [s.underlay removeFromSuperview];
+    table.backgroundColor=s.tableColor; table.opaque=s.tableOpaque; table.separatorStyle=s.separators;
+    objc_setAssociatedObject(table,&browseKey,nil,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [tables removeObject:table];
+}
+static void LayoutRail(CP26BrowseState *s, UIView *rail, CGFloat u) {
+    for (UIView *button in rail.subviews) {
+        if (![NSStringFromClass(button.class) isEqualToString:@"_UIStaticScrollbarButton"]) continue;
+        for (UIImageView *image in button.subviews) {
+            if (![image isKindOfClass:UIImageView.class] || !image.image || image.bounds.size.width<1) continue;
+            NSValue *prior=[s.railTransforms objectForKey:image];
+            if (!prior) {
+                prior=[NSValue valueWithCGAffineTransform:image.transform]; [s.railTransforms setObject:prior forKey:image];
+            }
+            // Keep the native button, focus ring and enabled/disabled presentation.
+            CGFloat scale=MIN(1,(11*u)/MAX(1,MIN(image.image.size.width,image.bounds.size.width)));
+            CGAffineTransform tr=CGAffineTransformScale(prior.CGAffineTransformValue,scale,scale);
+            if (!CGAffineTransformEqualToTransform(image.transform,tr)) image.transform=tr;
+        }
+    }
+}
+void CP26UpdateBrowseTable(UITableView *table, NSUInteger tab, BOOL compactHeader) {
+    CP26BrowseState *s=objc_getAssociatedObject(table,&browseKey);
+    if (tab==NSNotFound || !table.window) { RestoreTable(table); return; }
+    if (s.applying) return;
+    if (!s) {
+        s=[CP26BrowseState new]; s.table=table; s.geometry=[CP26PlacedViews new];
+        s.originalBackground=table.backgroundView; s.separators=table.separatorStyle;
+        s.tableColor=table.backgroundColor; s.tableOpaque=table.opaque;
+        s.canvas=CP26ReferenceCanvas(); s.underlay=CP26ReferenceCanvas();
+        s.railTransforms=[NSMapTable weakToStrongObjectsMapTable]; s.visible=[NSHashTable weakObjectsHashTable];
+        s.assistantBackgrounds=[NSMapTable weakToStrongObjectsMapTable];
+        objc_setAssociatedObject(table,&browseKey,s,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        if (!tables) tables=[NSHashTable weakObjectsHashTable]; [tables addObject:table];
+        if (tab>0) {
+            __weak UITableView *weakTable=table;
+            dispatch_async(dispatch_get_main_queue(), ^{
+                UITableView *t=weakTable;
+                if (t.window && objc_getAssociatedObject(t,&browseKey)==s && !t.hasUncommittedUpdates)
+                    [UIView performWithoutAnimation:^{ [t beginUpdates]; [t endUpdates]; }];
+            });
+        }
+    }
+    s.applying=YES; s.tab=tab;
+    UIWindow *window=table.window;
+    CGFloat w=window.bounds.size.width, u=w/400;
+    if (table.backgroundView!=s.canvas) table.backgroundView=s.canvas;
+    if (table.separatorStyle!=UITableViewCellSeparatorStyleNone) table.separatorStyle=UITableViewCellSeparatorStyleNone;
+    if (table.opaque) table.opaque=NO;
+    if (![table.backgroundColor isEqual:UIColor.clearColor]) table.backgroundColor=UIColor.clearColor;
+    if (table.superview && s.underlay.superview!=table.superview) [table.superview insertSubview:s.underlay belowSubview:table];
+    if (!CGRectEqualToRect(s.underlay.frame,table.superview.bounds)) s.underlay.frame=table.superview.bounds;
+    if (w<320 || w>560 || window.bounds.size.height<w) {
+        // Retain the established Home shelves on other CarPlay displays. UIKit
+        // supplies their viewport, rail and row widths on those displays.
+        HeaderInset(s,0); [s.geometry restore]; s.applying=NO; return;
+    }
+    CGRect visible=[table convertRect:table.bounds toView:window];
+    CGFloat nativeBottom=CGRectGetHeight(window.bounds)-CGRectGetMaxY(visible);
+    CGFloat desiredBottom=CGRectGetHeight(window.bounds)-34.5*u;
+    if (nativeBottom>=33*u && nativeBottom<=53*u &&
+        CGRectGetMaxY([table.superview convertRect:table.superview.bounds toView:window])>=desiredBottom) {
+        visible.size.height=desiredBottom-CGRectGetMinY(visible);
+        [s.geometry place:table in:window rect:visible];
+    }
+    if (s.insetDelta!=0 && fabs(table.contentInset.top-s.appliedInsetTop)>.1) s.insetDelta=0;
+    CGFloat nativeTop=table.adjustedContentInset.top-s.insetDelta;
+    CGFloat wantedTop=33*u-CGRectGetMinY(visible);
+    CGFloat delta=compactHeader && nativeTop>wantedTop && wantedTop>=0 ? wantedTop-nativeTop : 0;
+    HeaderInset(s,delta);
+    UIView *wrapper=nil, *rail=nil;
+    for (UIView *view in table.subviews) {
+        NSString *name=NSStringFromClass(view.class);
+        if ([name isEqualToString:@"UITableViewWrapperView"]) wrapper=view;
+        if ([name isEqualToString:@"_UIStaticScrollBar"] && !view.hidden && view.alpha>.01) rail=view;
+    }
+    BOOL scrolling=table.contentSize.height+table.adjustedContentInset.top+table.adjustedContentInset.bottom>table.bounds.size.height+1;
+    CGFloat right=(scrolling ? 368 : 393)*u;
+    if (wrapper) {
+        CGRect frame=wrapper.frame; frame.origin.x=9*u; frame.size.width=right-frame.origin.x;
+        [s.geometry place:wrapper in:table rect:frame];
+    }
+    if (rail && scrolling) {
+        CGRect frame=rail.frame; frame.origin.x=370*u; frame.size.width=30*u;
+        [s.geometry place:rail in:table rect:frame]; LayoutRail(s,rail,u);
+    }
+    NSArray *visibleCells=table.visibleCells;
+    for (UITableViewCell *cell in s.visible.allObjects) if (![visibleCells containsObject:cell]) {
+        RestoreFace(cell); RestoreAssistant(s,cell); [s.visible removeObject:cell];
+        [s.geometry restoreView:cell];
+    }
+    for (UITableViewCell *cell in visibleCells) {
+        [s.visible addObject:cell];
+        if (wrapper && cell.superview==wrapper) {
+            CGRect frame=cell.frame; frame.origin.x=0; frame.size.width=wrapper.bounds.size.width;
+            [s.geometry place:cell in:wrapper rect:frame];
+        }
+        if (tab==0) continue;
+        NSIndexPath *path=[table indexPathForCell:cell];
+        id item=path ? CP26BrowseModel(table,path) : nil;
+        if ([item isKindOfClass:CPListItem.class]) {
+            RestoreAssistant(s,cell);
+            BOOL last=path.section+1==table.numberOfSections && path.row+1==[table numberOfRowsInSection:path.section];
+            PaintFace(cell,item,tab,u,last);
+        } else {
+            RestoreFace(cell);
+            if ([NSStringFromClass(cell.class) rangeOfString:@"Assistant" options:NSCaseInsensitiveSearch].location!=NSNotFound) {
+                if (![s.assistantBackgrounds objectForKey:cell])
+                    [s.assistantBackgrounds setObject:(id)cell.backgroundConfiguration ?: NSNull.null forKey:cell];
+                UIBackgroundConfiguration *bg=[UIBackgroundConfiguration clearConfiguration];
+                bg.backgroundColor=[UIColor colorWithWhite:1 alpha:.13]; bg.cornerRadius=16*u;
+                if (![cell.backgroundConfiguration isEqual:bg]) cell.backgroundConfiguration=bg;
+            } else RestoreAssistant(s,cell);
+        }
+    }
+    s.applying=NO;
+}
+BOOL CP26BrowseHasCanvas(UIWindow *window) {
+    for (UITableView *table in tables.allObjects) {
+        CP26BrowseState *s=objc_getAssociatedObject(table,&browseKey);
+        if (table.window==window && !table.hidden && s.canvas.superview) return YES;
+    }
+    return NO;
+}
+void CP26RefreshBrowseGeometry(void) {
+    for (UITableView *t in tables.allObjects) [t setNeedsLayout];
+}
+void CP26RestoreBrowseTables(void) {
+    for (UITableView *t in tables.allObjects) { RestoreTable(t); [t reloadData]; }
+}
+void CP26BrowseReport(NSMutableString *report) {
+    for (UITableView *t in tables.allObjects) {
+        CP26BrowseState *s=objc_getAssociatedObject(t,&browseKey);
+        if (!t.window || !s) continue;
+        NSUInteger painted=0;
+        for (UITableViewCell *cell in t.visibleCells) if (objc_getAssociatedObject(cell,&faceKey)) painted++;
+        [report appendFormat:@"BROWSE tab=%lu viewport=%@ topInset=%.1f visibleRows=%lu styledListRows=%lu assistantRows=%lu\n",
+            (unsigned long)s.tab,NSStringFromCGRect([t convertRect:t.bounds toView:t.window]),t.adjustedContentInset.top,
+            (unsigned long)t.visibleCells.count,(unsigned long)painted,(unsigned long)s.assistantBackgrounds.count];
+    }
+}

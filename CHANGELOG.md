@@ -1,3 +1,16 @@
+# CarPlay26 v0.2.69 — Spotify portrait layout
+
+- Uses the four iOS 26 browse screenshots and the separate full-player screenshot on the 400 × 416 portrait display
+- Places the native tabs at the left. The right-hand player uses Spotify artwork, title, play/pause, next and the host’s Now Playing action when a Spotify track is available
+- Matches Home shortcut and shelf spacing, translucent surfaces and the charcoal wallpaper colour field. Recents, Search and Library render their live Spotify list items, with native scrolling and selections
+- Arranges the full player’s artwork, song details, transport, progress and available Spotify actions over blurred current artwork
+- With Glass Dock enabled, sizes the dock surface, live status icons and app slots. The fourth Settings shortcut uses the shell’s native action when CarPlay makes it available. An explicit third-slot pin takes priority
+- The existing Spotify layout report includes browser, playback and geometry fields. Capture the screen being compared after installing the package through the normal build workflow
+
+# CarPlay26 v0.2.68 — Spotify reference styling
+
+- Centres the four native Spotify tabs in a compact teal pill, adjusts shelf captions and spacing, and tints the enabled dark glass dock blue while Spotify is foreground. Reads missing mix titles from legible cover text and shows available artist names beneath the artwork.
+
 # CarPlay26 v0.2.67 — Liked Songs shortcut
 
 - Supplies the Liked Songs shortcut title when its confirmed heart artwork is present and Spotify provides no readable caption.

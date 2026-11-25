@@ -1,8 +1,8 @@
 Package: com.tillman109.carplay26
 Name: CarPlay26
-Version: 0.2.67
+Version: 0.2.69
 Architecture: iphoneos-arm64e
-Description: CarPlay26 with compact Spotify Home shortcuts and artwork shelves.
+Description: CarPlay26 with portrait Spotify tabs, live mini-player, list styling and compact dock.
 Maintainer: CarPlay26 Project
 Author: CarPlay26 Project
 Section: Tweaks

@@ -1,8 +1,12 @@
 #import "SpotifyHomeLayout.h"
+#import "SpotifyReference.h"
 #import <CarPlay/CarPlay.h>
 #import <QuartzCore/QuartzCore.h>
 #import <objc/runtime.h>
 #import <math.h>
+#import <Vision/VNRecognizeTextRequest.h>
+#import <Vision/VNRequestHandler.h>
+#import <Vision/VNObservation.h>
 
 // These are the iOS 16 host's list model and its configured image-row controls.
 // Test each optional getter at the call site. The source of every action is the
@@ -67,7 +71,7 @@ static BOOL CarWindow(UIWindow *window) {
         [window.windowScene.session.role isEqualToString:@"UIWindowSceneSessionRoleCarPlay"];
 }
 
-static id Model(UITableView *table, NSIndexPath *path) {
+id CP26BrowseModel(UITableView *table, NSIndexPath *path) {
     id<CP26ListHost> source = Host(table.dataSource);
     id<UITableViewDataSource> ds = table.dataSource;
     if (!path || !ds || path.section < 0 || path.row < 0) return nil;
@@ -81,51 +85,21 @@ static id Model(UITableView *table, NSIndexPath *path) {
     // Some host revisions wrap their data source items. Use the public template
     // only when its section/row map agrees with the currently exposed table.
     CPListTemplate *list = List(ListController(table));
-    if (list.assistantCellConfiguration || list.sections.count != (NSUInteger)sections) return nil;
-    NSArray *items = list.sections[path.section].items;
-    return items.count == (NSUInteger)rows ? items[path.row] : nil;
-}
-
-// A small, inert colour field sampled from exposed background in the reference.
-// Drawing it as UITableView.backgroundView keeps it fixed as native rows scroll.
-static UIImage *BackdropImage(void) {
-    static UIImage *image;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        static const uint32_t palette[13 * 13] = {
-    0x192c2f, 0x1e3133, 0x1e3538, 0x1d3b3e, 0x1d4043, 0x1d464a, 0x1d4b4e, 0x1d4e52, 0x1e5153, 0x1d5356, 0x1e5255, 0x203c46, 0x3f444c,
-    0x1e3033, 0x1e3135, 0x1e363a, 0x1d3c3f, 0x1d4244, 0x1e474a, 0x1e4c4f, 0x1d5254, 0x1d5556, 0x1d5759, 0x1d5456, 0x1f3441, 0x373943,
-    0x1e3135, 0x1e3336, 0x1d393c, 0x1e3e41, 0x1e4447, 0x1e4a4d, 0x1d4f52, 0x1d5657, 0x1e5c5c, 0x205e5e, 0x205155, 0x1f2c3e, 0x353842,
-    0x1e3136, 0x1e3538, 0x1e3a3d, 0x1e4043, 0x1d4549, 0x1e4c4f, 0x1d5556, 0x215e5e, 0x286462, 0x2b6261, 0x24434d, 0x20253b, 0x353942,
-    0x1e3338, 0x1e363a, 0x1e3b3f, 0x1d4144, 0x1d484b, 0x1e5153, 0x215c5c, 0x2a6563, 0x326965, 0x30585b, 0x253546, 0x20263f, 0x3b3e48,
-    0x1f333a, 0x1e363b, 0x1e3b40, 0x1d4246, 0x1d4b4e, 0x1e5957, 0x296462, 0x356b67, 0x396765, 0x304652, 0x2e3552, 0x2d365b, 0x3a3f4f,
-    0x1e3239, 0x1e363c, 0x1e3c41, 0x1d4449, 0x1e5051, 0x245e5c, 0x316864, 0x396867, 0x3b5c64, 0x3e4c69, 0x3e4973, 0x333f6a, 0x3b4052,
-    0x1e323b, 0x1e353d, 0x1e3b43, 0x1d474c, 0x1f5557, 0x2a6460, 0x346465, 0x3c5967, 0x435672, 0x45537d, 0x3f4c7b, 0x364270, 0x3e4455,
-    0x1e323b, 0x1e353f, 0x1e3c44, 0x1d484e, 0x21575a, 0x2c5e61, 0x325360, 0x405171, 0x495681, 0x414d7d, 0x394675, 0x374572, 0x3e4455,
-    0x1f2f3e, 0x1e323f, 0x1d3d46, 0x1d474f, 0x214f5a, 0x27465b, 0x314162, 0x48537d, 0x455180, 0x3c4878, 0x394775, 0x33416d, 0x3d4252,
-    0x20253b, 0x1f2e45, 0x1f3a4f, 0x1f3b55, 0x203856, 0x2a3c5e, 0x39446e, 0x414c7a, 0x3e4a7b, 0x3b4878, 0x364472, 0x2d3a63, 0x383d4c,
-    0x21314f, 0x20355b, 0x223a68, 0x223868, 0x21335d, 0x2b3961, 0x3c4a76, 0x3b4877, 0x364273, 0x34416f, 0x2e3b66, 0x273358, 0x363b49,
-    0x24446b, 0x23426e, 0x233f72, 0x253b75, 0x233670, 0x27356b, 0x323e73, 0x303c6d, 0x2c3966, 0x29365f, 0x253157, 0x212d4c, 0x363a45,
-        };
-        uint8_t pixels[13 * 13 * 4];
-        for (NSUInteger i = 0; i < 13 * 13; i++) {
-            pixels[4*i] = (palette[i] >> 16) & 255;
-            pixels[4*i+1] = (palette[i] >> 8) & 255;
-            pixels[4*i+2] = palette[i] & 255;
-            pixels[4*i+3] = 255;
-        }
-        CFDataRef data = CFDataCreate(NULL, pixels, sizeof(pixels));
-        CGDataProviderRef provider = CGDataProviderCreateWithCFData(data);
-        CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
-        CGImageRef cg = CGImageCreate(13, 13, 8, 32, 13*4, space,
-            kCGImageAlphaNoneSkipLast | kCGBitmapByteOrder32Big, provider,
-            NULL, true, kCGRenderingIntentDefault);
-        if (cg) { image = [UIImage imageWithCGImage:cg]; CGImageRelease(cg); }
-        CGColorSpaceRelease(space);
-        CGDataProviderRelease(provider);
-        CFRelease(data);
-    });
-    return image;
+    NSInteger contentSections=(NSInteger)list.sections.count;
+    NSInteger section=path.section, row=path.row;
+    CPAssistantCellConfiguration *assistant=list.assistantCellConfiguration;
+    if (assistant && sections==contentSections+1) {
+        NSInteger assistantSection=assistant.position==CPAssistantCellPositionTop ? 0 : sections-1;
+        if (section==assistantSection || [ds tableView:table numberOfRowsInSection:assistantSection]!=1) return nil;
+        if (section>assistantSection) section--;
+    } else if (sections!=contentSections) return nil;
+    if (section<0 || section>=contentSections) return nil;
+    NSArray *items=list.sections[section].items;
+    if (sections==contentSections && assistant && rows==(NSInteger)items.count+1) {
+        if (assistant.position==CPAssistantCellPositionTop && section==0) row--;
+        else if (!(assistant.position==CPAssistantCellPositionBottom && section==contentSections-1)) return nil;
+    } else if (rows!=(NSInteger)items.count) return nil;
+    return row>=0 && row<(NSInteger)items.count ? items[row] : nil;
 }
 
 // Compare small rendered RGB thumbnails across the differently sized versions
@@ -258,24 +232,11 @@ static CPListItem *MatchArtwork(UIImage *image, NSArray<CPListItem *> *options) 
 @implementation CP26HomeShelf
 @end
 
-@interface CP26RailIcon : NSObject
-@property(nonatomic) CGAffineTransform transform;
-@property(nonatomic,strong) UIColor *tint;
-@property(nonatomic,strong) UIImage *original;
-@property(nonatomic,strong) UIImage *templated;
-@end
-@implementation CP26RailIcon
-@end
-
 @interface CP26HomeSession : NSObject
 @property(nonatomic,weak) UITableView *table;
 @property(nonatomic,weak) UIViewController *home;
 @property(nonatomic,weak) UITabBarController *tabs;
 @property(nonatomic,weak) UIWindow *window;
-@property(nonatomic,strong) UIView *nativeBackdrop;
-@property(nonatomic,strong) UIImageView *backdrop;
-@property(nonatomic) UITableViewCellSeparatorStyle nativeSeparator;
-@property(nonatomic,strong) NSMapTable<UIImageView *,CP26RailIcon *> *railIcons;
 @property(nonatomic,strong) NSMutableDictionary<NSUUID *,CP26HomeShelf *> *shelves;
 @property(nonatomic,copy) NSArray<CPListItem *> *catalogue;
 @property(nonatomic,copy) NSDictionary *recentCaptions;
@@ -421,7 +382,7 @@ static CP26HomeSession *Session(UITableView *table) {
     for (NSInteger section = 0; section < table.numberOfSections && !hasImages; section++) {
         NSInteger count = [table numberOfRowsInSection:section];
         for (NSInteger row = 0; row < MIN(count,6); row++) {
-            if ([Model(table,[NSIndexPath indexPathForRow:row inSection:section])
+            if ([CP26BrowseModel(table,[NSIndexPath indexPathForRow:row inSection:section])
                     isKindOfClass:CPListImageRowItem.class]) { hasImages = YES; break; }
         }
     }
@@ -432,18 +393,9 @@ static CP26HomeSession *Session(UITableView *table) {
     s.selectionBackgrounds = [NSMapTable weakToStrongObjectsMapTable];
     s.visitedItems = [NSMutableOrderedSet orderedSet];
     s.recentCaptions = [NSUserDefaults.standardUserDefaults dictionaryForKey:recentsCacheKey];
-    s.railIcons = [NSMapTable weakToStrongObjectsMapTable];
-    s.nativeBackdrop = table.backgroundView;
-    s.nativeSeparator = table.separatorStyle;
-    s.backdrop = [[UIImageView alloc] initWithImage:BackdropImage()];
-    s.backdrop.contentMode = UIViewContentModeScaleToFill;
-    s.backdrop.isAccessibilityElement = NO;
-    s.backdrop.userInteractionEnabled = NO;
     objc_setAssociatedObject(table,&sessionKey,s,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     if (!sessions) sessions = [NSHashTable weakObjectsHashTable];
     [sessions addObject:s];
-    table.backgroundView = s.backdrop;
-    table.separatorStyle = UITableViewCellSeparatorStyleNone;
     UpdateCatalogue(s);
     QueueLayout(s);
     return s;
@@ -457,20 +409,18 @@ typedef struct {
 } HomeMetrics;
 
 static HomeMetrics Metrics(CGFloat width) {
-    // Measured in the reference's 482-pixel content column, scaled into points.
-    CGFloat inset = 2;
-    CGFloat inner = MAX(1,width-2*inset);
-    CGFloat u = MIN(1.1,MAX(.48,inner/482.0));
-    CGFloat gap = 8*u;
-    return (HomeMetrics){inset,gap,(inner-gap)/2,31*u,(inner-5*gap)/6,
-        43*u,26*u,13*u,13*u,3*u,12*u,7*u};
+    // The visible wrapper starts at x=9, with content from x=15 to x=368.
+    CGFloat u = MIN(1.4,MAX(.72,width/359.0));
+    CGFloat inset = 6*u, gap = 6*u, inner = width-inset;
+    return (HomeMetrics){inset,gap,(inner-gap)/2,23*u,(inner-5*gap)/6,
+        32*u,26*u,9*u,9*u,3*u,11*u,7.5*u};
 }
 
 static CGFloat RowHeight(CGFloat width, BOOL shortcut, NSUInteger count) {
     HomeMetrics m = Metrics(width);
     if (shortcut) {
         NSUInteger rows = (MIN(count,maxTiles)+1)/2;
-        return rows ? 2 + rows*m.tileHeight + (rows-1)*m.gap + m.shortcutBottom : 0;
+        return rows ? 9*m.tileHeight/32 + rows*m.tileHeight + (rows-1)*m.gap + m.shortcutBottom : 0;
     }
     return m.header + m.art + m.captionGap + m.title + m.subtitle + m.shelfBottom;
 }
@@ -482,10 +432,39 @@ static CGFloat ColumnWidth(UITableView *table) {
     return MAX(100,table.bounds.size.width - 54); // measured native arrow rail + leading inset
 }
 
+// Only the four selected list roots share the reference geometry. Detail lists use
+// their own navigation bars, and the vehicle's limited-list mode owns its layout.
+static NSUInteger BrowseTab(UITableView *table) {
+    if (!CP26HomeEnabled || !CarWindow(table.window) || Limited(table) ||
+        table.window.bounds.size.width > table.window.bounds.size.height ||
+        table.window.bounds.size.width < 320 || table.window.bounds.size.width > 560) return NSNotFound;
+    UIViewController *list = ListController(table);
+    UITabBarController *tabs = list.tabBarController;
+    if (!HostClass(tabs,@"CPSTabBarViewController") || tabs.viewControllers.count != 4) return NSNotFound;
+    UIViewController *selected = tabs.selectedViewController;
+    if (selected == list) return tabs.selectedIndex;
+    if ([selected isKindOfClass:UINavigationController.class]) {
+        UINavigationController *nav = (UINavigationController *)selected;
+        if (nav.topViewController == list && nav.viewControllers.firstObject == list) return tabs.selectedIndex;
+    }
+    return NSNotFound;
+}
+
 CGFloat CP26HomeHeight(UITableView *table, NSIndexPath *path, CGFloat original) {
+    NSUInteger tab=BrowseTab(table);
+    if (tab!=NSNotFound && tab>0) {
+        id item=CP26BrowseModel(table,path);
+        CGFloat u=table.bounds.size.width/400;
+        if ([item isKindOfClass:CPListItem.class]) return 42.4*u;
+        if (tab==2 && List(ListController(table)).assistantCellConfiguration) {
+            CPAssistantCellConfiguration *assistant=List(ListController(table)).assistantCellConfiguration;
+            if (assistant.position==CPAssistantCellPositionTop && path.section==0 && path.row==0) return 34*u;
+        }
+        return original;
+    }
     CP26HomeSession *s = objc_getAssociatedObject(table,&sessionKey);
     if (!CP26HomeEnabled || !s || !HomeTabs(s.home) || Limited(table)) return original;
-    id model = Model(table,path);
+    id model = CP26BrowseModel(table,path);
     if ([model isKindOfClass:CPListItem.class]) {
         CPListItem *item = model;
         if (!item.image && !item.detailText.length && item.text.length)
@@ -558,6 +537,57 @@ static NSString *AccessibleTitle(UIImage *image, UIControl *button, NSString *he
     return nil;
 }
 
+// Spotify prints the mix name along the bottom of its personalised covers.
+// Read this band only when the template supplies no display title.
+static NSString *MixCoverTitle(UIImage *image, CP26HomeSession *session) {
+    NSData *key = ArtworkPrint(image);
+    if (!key || !image.CGImage) return nil;
+    static NSCache *titles;
+    static NSMutableSet *pending;
+    static dispatch_queue_t queue;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        titles = [NSCache new]; titles.countLimit = 96;
+        pending = [NSMutableSet set];
+        queue = dispatch_queue_create("com.tillman109.carplay26.mix-titles",DISPATCH_QUEUE_SERIAL);
+        dispatch_set_target_queue(queue,dispatch_get_global_queue(QOS_CLASS_UTILITY,0));
+    });
+    id saved = [titles objectForKey:key];
+    if (saved || [pending containsObject:key] || pending.count >= 12)
+        return [saved isKindOfClass:NSString.class] ? saved : nil;
+    [pending addObject:key];
+    __weak CP26HomeSession *weakSession = session;
+    dispatch_async(queue, ^{
+        @autoreleasepool {
+            VNRecognizeTextRequest *request = [VNRecognizeTextRequest new];
+            request.regionOfInterest = CGRectMake(0,0,1,.29);
+            request.recognitionLevel = VNRequestTextRecognitionLevelAccurate;
+            request.usesLanguageCorrection = NO;
+            VNImageRequestHandler *handler = [[VNImageRequestHandler alloc] initWithCGImage:image.CGImage options:@{}];
+            NSString *title = nil;
+            if ([handler performRequests:@[request] error:nil]) {
+                for (VNRecognizedTextObservation *line in request.results) {
+                    VNRecognizedText *candidate = [line topCandidates:1].firstObject;
+                    NSString *text = DisplayText(candidate.string);
+                    if (candidate.confidence >= .65 && [text.lowercaseString hasSuffix:@" mix"]) {
+                        title = text; break;
+                    }
+                }
+            }
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [pending removeObject:key];
+                [titles setObject:title ?: (id)NSNull.null forKey:key];
+                CP26HomeSession *live = weakSession;
+                if (!title || !live || !CP26HomeEnabled || !HomeTabs(live.home) ||
+                    objc_getAssociatedObject(live.table,&sessionKey) != live) return;
+                for (UITableViewCell *cell in live.table.visibleCells)
+                    CP26HomeInvalidateRow(cell);
+            });
+        }
+    });
+    return nil;
+}
+
 static NSArray<CP26HomeEntry *> *Entries(CPListImageRowItem *row, UITableViewCell *cell,
                                         CP26HomeSession *s, BOOL shortcut) {
     NSArray<UIImage *> *images = row.gridImages;
@@ -602,7 +632,12 @@ static NSArray<CP26HomeEntry *> *Entries(CPListImageRowItem *row, UITableViewCel
             if (key) entry.title = DisplayText(s.recentCaptions[key]);
         }
         if (shortcut && !entry.title && IsLikedSongsArtwork(art)) entry.title = @"Liked Songs";
-        entry.subtitle = DisplayText(caption.detailText) ?: DisplayText(metadata[@"artist"]) ?: DisplayText(metadata[@"subtitle"]);
+        entry.subtitle = DisplayText(metadata[@"artist"]) ?: DisplayText(caption.detailText) ?: DisplayText(metadata[@"subtitle"]);
+        NSRange by = [entry.subtitle rangeOfString:@" • by " options:NSCaseInsensitiveSearch];
+        if (entry.subtitle && by.location != NSNotFound && NSMaxRange(by) < entry.subtitle.length)
+            entry.subtitle = [entry.subtitle substringFromIndex:NSMaxRange(by)];
+        if (!shortcut && !entry.title && [row.text.lowercaseString isEqualToString:@"your top mixes"])
+            entry.title = MixCoverTitle(art,s);
         entry.nativeIndex = direct ? index : NSNotFound;
         entry.detail = detail;
         entry.enabled = row.isEnabled && (!detail || detail.isEnabled);
@@ -644,7 +679,7 @@ static NSArray<CP26HomeEntry *> *Entries(CPListImageRowItem *row, UITableViewCel
 - (void)paint {
     BOOL focused = self.isFocused || self.isHighlighted;
     self.backgroundColor = focused ? [UIColor colorWithWhite:1 alpha:.30] :
-        (self.shortcut ? [UIColor colorWithWhite:1 alpha:.155] : UIColor.clearColor);
+        (self.shortcut ? [UIColor colorWithWhite:1 alpha:.148] : UIColor.clearColor);
     self.layer.borderWidth = self.isFocused ? 1.5 : 0;
     self.layer.borderColor = UIColor.whiteColor.CGColor;
     self.alpha = self.enabled ? 1 : .48;
@@ -704,7 +739,7 @@ static NSArray<CP26HomeEntry *> *Entries(CPListImageRowItem *row, UITableViewCel
     UITableView *table = self.session.table;
     if (!CP26HomeEnabled || !self.window || !HomeTabs(self.session.home) ||
         Limited(table) || self.needsContent) return nil;
-    id current = Model(table,[table indexPathForCell:self.cell]);
+    id current = CP26BrowseModel(table,[table indexPathForCell:self.cell]);
     if (![current isKindOfClass:CPListImageRowItem.class] || ![(CPListImageRowItem *)current isEnabled])
         return nil;
     return current == self.model || [Identifier(current) isEqual:Identifier(self.model)] ? current : nil;
@@ -838,9 +873,9 @@ static NSArray<CP26HomeEntry *> *Entries(CPListImageRowItem *row, UITableViewCel
 - (void)layoutSubviews {
     [super layoutSubviews];
     HomeMetrics m = Metrics(self.bounds.size.width);
-    CGFloat u = m.tileHeight / 43;
+    CGFloat u = m.tileHeight / 32;
 
-    self.headingText.font = [UIFont systemFontOfSize:16*u weight:UIFontWeightSemibold];
+    self.headingText.font = [UIFont systemFontOfSize:12.5*u weight:UIFontWeightSemibold];
     CGFloat textWidth = MIN(MAX(0,self.bounds.size.width-2*m.inset-20*u),
         ceil([self.headingText sizeThatFits:CGSizeMake(CGFLOAT_MAX,m.header)].width));
     self.heading.frame = CGRectMake(m.inset,0,MIN(self.bounds.size.width,textWidth+22*u),m.header);
@@ -848,20 +883,20 @@ static NSArray<CP26HomeEntry *> *Entries(CPListImageRowItem *row, UITableViewCel
     self.chevron.frame = CGRectMake(textWidth+5*u,(m.header-12*u)/2,8*u,12*u);
     for (NSUInteger i=0; i<self.buttons.count; i++) {
         CP26HomeButton *b = self.buttons[i];
-        b.caption.font = [UIFont systemFontOfSize:(self.shortcut ? 13.6 : 10.9)*u
+        b.caption.font = [UIFont systemFontOfSize:(self.shortcut ? 10.1 : 8.1)*u
             weight:self.shortcut ? UIFontWeightMedium : UIFontWeightSemibold];
-        b.byline.font = [UIFont systemFontOfSize:10.7*u weight:UIFontWeightRegular];
+        b.byline.font = [UIFont systemFontOfSize:7.9*u weight:UIFontWeightRegular];
         if (self.shortcut) {
-            b.frame = CGRectMake(m.inset+(i%2)*(m.tile+m.gap),2+(i/2)*(m.tileHeight+m.gap),m.tile,m.tileHeight);
-            b.layer.cornerRadius = 9*u;
-            b.cover.frame = CGRectMake(6*u,(m.tileHeight-m.thumb)/2,m.thumb,m.thumb);
-            b.cover.layer.cornerRadius = 5*u;
-            CGFloat x = CGRectGetMaxX(b.cover.frame)+6*u;
+            b.frame = CGRectMake(m.inset+(i%2)*(m.tile+m.gap),9*u+(i/2)*(m.tileHeight+m.gap),m.tile,m.tileHeight);
+            b.layer.cornerRadius = 7*u;
+            b.cover.frame = CGRectMake(4.5*u,(m.tileHeight-m.thumb)/2,m.thumb,m.thumb);
+            b.cover.layer.cornerRadius = 3.5*u;
+            CGFloat x = CGRectGetMaxX(b.cover.frame)+4.5*u;
             b.caption.frame = CGRectMake(x,0,MAX(0,m.tile-x-5*u),m.tileHeight);
         } else {
             b.frame = CGRectMake(m.inset+i*(m.art+m.gap),m.header,m.art,m.art+m.captionGap+m.title+m.subtitle);
             b.layer.cornerRadius = 4*u;
-            b.cover.frame = CGRectMake(0,0,m.art,m.art); b.cover.layer.cornerRadius = 5*u;
+            b.cover.frame = CGRectMake(0,0,m.art,m.art); b.cover.layer.cornerRadius = 3.5*u;
             b.caption.frame = CGRectMake(0,m.art+m.captionGap,m.art,m.title);
             b.byline.frame = CGRectMake(0,m.art+m.captionGap+m.title,m.art,m.subtitle);
         }
@@ -898,7 +933,7 @@ void CP26HomeLayoutRow(UITableViewCell *cell) {
     }
     CP26HomeSession *s = table ? objc_getAssociatedObject(table,&sessionKey) : nil;
     NSIndexPath *path = s && HomeTabs(s.home) && !Limited(table) ? [table indexPathForCell:cell] : nil;
-    CPListImageRowItem *model = path ? Model(table,path) : nil;
+    CPListImageRowItem *model = path ? CP26BrowseModel(table,path) : nil;
     if (![model isKindOfClass:CPListImageRowItem.class]) { if (row) CP26HomeRestoreRow(cell); return; }
     if (!row) {
         row = [[CP26HomeRow alloc] initWithFrame:cell.bounds]; row.cell = cell;
@@ -994,7 +1029,7 @@ static void ReadDetail(CP26HomeSession *s, UIViewController *vc, UITableView *ta
         NSInteger count = [table numberOfRowsInSection:section];
         for (NSInteger row = 0; row<count && seen<budget; row++,seen++) {
             NSIndexPath *path = [NSIndexPath indexPathForRow:row inSection:section];
-            CPListItem *item = Model(table,path);
+            CPListItem *item = CP26BrowseModel(table,path);
             if (![item isKindOfClass:CPListItem.class] || !item.text.length) continue;
             if (first.count < maxTiles && item.image && !item.image.isSymbolImage) [first addObject:item];
             if (s.requestedItem && SameDetailItem(s.requestedItem,item)) { match = path; matches++; }
@@ -1025,39 +1060,13 @@ static void ReadDetail(CP26HomeSession *s, UIViewController *vc, UITableView *ta
     }
     if (table.dragging || table.tracking || Limited(table) || Limited(s.table)) s.requestedItem = nil;
     if (!s.requestedItem || matches != 1) return;
-    CPListItem *live = Model(table,match);
+    CPListItem *live = CP26BrowseModel(table,match);
     if (![live isKindOfClass:CPListItem.class] || !live.isEnabled || !table.allowsSelection ||
         !SameDetailItem(s.requestedItem,live) ||
         ![table.delegate respondsToSelector:@selector(tableView:didSelectRowAtIndexPath:)]) return;
     CancelRequest(s); // disarm before Spotify can push a template or start playback
     [table selectRowAtIndexPath:match animated:NO scrollPosition:UITableViewScrollPositionNone];
     [table.delegate tableView:table didSelectRowAtIndexPath:match];
-}
-
-static void StyleRail(CP26HomeSession *s) {
-    for (UIView *bar in s.table.subviews) {
-        if (!HostClass(bar,@"_UIStaticScrollBar")) continue;
-        for (UIView *button in bar.subviews) {
-            if (!HostClass(button,@"_UIStaticScrollbarButton")) continue;
-            for (UIImageView *v in button.subviews) {
-                if (![v isKindOfClass:UIImageView.class] || !v.image) continue;
-                CP26RailIcon *saved = [s.railIcons objectForKey:v];
-                if (!saved) {
-                    saved = [CP26RailIcon new]; saved.transform = v.transform; saved.tint = v.tintColor;
-                    [s.railIcons setObject:saved forKey:v];
-                }
-                if (v.image != saved.templated) {
-                    saved.original = v.image;
-                    saved.templated = [v.image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
-                    if (v.image != saved.templated) v.image = saved.templated;
-                }
-                CGAffineTransform target = CGAffineTransformScale(saved.transform,.53,.53);
-                if (!CGAffineTransformEqualToTransform(v.transform,target)) v.transform = target;
-                UIColor *tint = [UIColor colorWithWhite:1 alpha:.72];
-                if (![v.tintColor isEqual:tint]) v.tintColor = tint;
-            }
-        }
-    }
 }
 
 static void RestoreSelection(CP26HomeSession *s, UITableViewCell *cell) {
@@ -1068,7 +1077,7 @@ static void RestoreSelection(CP26HomeSession *s, UITableViewCell *cell) {
 }
 
 static void StyleSelection(CP26HomeSession *s, UITableViewCell *cell) {
-    CPListItem *item = Model(s.table,[s.table indexPathForCell:cell]);
+    CPListItem *item = CP26BrowseModel(s.table,[s.table indexPathForCell:cell]);
     if (![item isKindOfClass:CPListItem.class] || item.image || item.detailText.length || !item.text.length) {
         RestoreSelection(s,cell);
         return;
@@ -1089,19 +1098,16 @@ static void Detach(CP26HomeSession *s) {
     UITableView *table = s.table;
     CancelRequest(s);
     for (UITableViewCell *cell in table.visibleCells) CP26HomeRestoreRow(cell);
-    for (UIImageView *v in s.railIcons.keyEnumerator) {
-        CP26RailIcon *saved = [s.railIcons objectForKey:v];
-        v.transform = saved.transform; v.tintColor = saved.tint;
-        if (v.image == saved.templated) v.image = saved.original;
-    }
-    if (table.backgroundView == s.backdrop) table.backgroundView = s.nativeBackdrop;
-    table.separatorStyle = s.nativeSeparator;
     if (table) objc_setAssociatedObject(table,&sessionKey,nil,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     [sessions removeObject:s];
 }
 
 void CP26HomeTableLayout(UITableView *table) {
     if (!CP26HomeEnabled || !NSThread.isMainThread) return;
+    NSUInteger tab=BrowseTab(table);
+    UIViewController *owner=ListController(table);
+    BOOL existingHome=tab==NSNotFound && CarWindow(table.window) && !Limited(table) && HomeTabs(owner);
+    CP26UpdateBrowseTable(table,existingHome ? 0 : tab,tab!=NSNotFound && CP26HasCompactHeader(owner.tabBarController.tabBar));
     if (table.tracking || table.dragging)
         for (CP26HomeSession *s in sessions.allObjects)
             if (s.requestedItem && table != s.table && table.window == s.window) s.requestedItem = nil;
@@ -1114,7 +1120,6 @@ void CP26HomeTableLayout(UITableView *table) {
     }
     CP26HomeSession *s = Session(table);
     if (!s) return;
-    StyleRail(s);
     NSArray *visible = table.visibleCells;
     for (UITableViewCell *cell in s.selectionBackgrounds.keyEnumerator.allObjects)
         if (![visible containsObject:cell] || !HomeTabs(s.home)) RestoreSelection(s,cell);
@@ -1144,6 +1149,8 @@ void CP26HomeListAppeared(UIViewController *vc) {
 }
 
 void CP26HomeListDisappeared(UIViewController *vc) {
+    UITableView *departing=NativeTable(vc);
+    if (departing) CP26UpdateBrowseTable(departing,NSNotFound,NO);
     // Retain display metadata from lists the user actually visited, including
     // Recents and Library. Match by artwork only when the match is unambiguous.
     for (CP26HomeSession *s in sessions.allObjects) {
@@ -1184,6 +1191,7 @@ void CP26HomeSetEnabled(BOOL enabled) {
     if (!NSThread.isMainThread || CP26HomeEnabled == enabled) return;
     CP26HomeEnabled = enabled;
     if (enabled) return;
+    CP26RestoreBrowseTables();
     for (CP26HomeSession *s in sessions.allObjects) {
         UITableView *table = s.table;
         Detach(s);
@@ -1206,7 +1214,7 @@ void CP26HomeAppendReport(NSMutableString *report) {
                 if (e.title.length) titles++;
                 if (e.subtitle.length) subtitles++;
             }
-            id item = Model(s.table,path);
+            id item = CP26BrowseModel(s.table,path);
             NSUInteger imageCount = [item isKindOfClass:CPListImageRowItem.class] ?
                 ((CPListImageRowItem *)item).gridImages.count : 0;
             [report appendFormat:@"HOME section=%ld row=%ld modelImages=%lu controls=%lu displayed=%lu titles=%lu subtitles=%lu\n",

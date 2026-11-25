@@ -2,6 +2,7 @@
 #import <CoreFoundation/CoreFoundation.h>
 #import <UIKit/UIKit.h>
 #import "SpotifyHomeLayout.h"
+#import "SpotifyReference.h"
 #import <QuartzCore/QuartzCore.h>
 #include <unistd.h>
 
@@ -323,7 +324,7 @@ static void CP26SpotifyCaptureNow(NSString *reason) {
     if (![NSThread isMainThread]) return;
     UIApplication *app = UIApplication.sharedApplication;
     NSMutableString *report = [NSMutableString stringWithFormat:
-        @"CarPlay26 v0.2.62 | Read-only Spotify template host report\n"
+        @"CarPlay26 v0.2.69 | Spotify template host geometry\n"
          "Date=%@\nPID=%d\nProcess=%@\nTrigger=%@\n"
          "No app text, track titles, contact names, images or playlist data collected\n\n",
         NSDate.date, getpid(), NSProcessInfo.processInfo.processName, reason];
@@ -389,6 +390,9 @@ static void CP26SpotifyCaptureNow(NSString *reason) {
 
     CP26SpotifyInspectNavigation(app,report);
     CP26HomeAppendReport(report);
+    CP26BrowseReport(report);
+    CP26PlaybackReport(report);
+    CP26FullPlayerReport(report);
 
     NSFileManager *fs = NSFileManager.defaultManager;
     NSString *home = NSHomeDirectory();

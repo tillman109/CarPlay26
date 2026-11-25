@@ -5,12 +5,13 @@
 #import <objc/runtime.h>
 #include <math.h>
 #import "SpotifyHomeLayout.h"
+#import "SpotifyReference.h"
 
-// CarPlay26 v0.2.62: Spotify Home content layout and native animated pill navigation.
+// Spotify template styling and foreground state for CarPlay26.
 // The CarPlay shell identifies the foreground app via the already-observed
 // DBAppDockViewController.activeBundleIdentifier native getter. A Darwin
-// notification conveys only a boolean to CarPlayTemplateUIHost, avoiding
-// cross-sandbox preference reads and access to music/user data.
+// notification conveys foreground and preference states to CarPlayTemplateUIHost.
+// Its mini-player reads the active Spotify playback session inside that host.
 // No Spotify process injection or template-content hooks are used.
 
 static BOOL CP26SpotifyStyleEnabled = NO;       // CarPlay shell: home panels
@@ -69,6 +70,7 @@ static void CP26SpotifySendShellState(BOOL force) {
         CP26SpotifyLastState == spotifyIsForeground) return;
     CP26SpotifyLastStateKnown = YES;
     CP26SpotifyLastState = spotifyIsForeground;
+    CP26RefreshGlassDock();
     // Mode notifications precede the foreground signal so the host can keep
     // panel and navigation switches independent without reading shell prefs.
     CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
@@ -149,6 +151,20 @@ static void CP26SpotifyNavChanged(__unused CFNotificationCenterRef center,
 // not present when Spotify initially renders. Do NOT require its presence:
 // otherwise a correctly active Spotify screen flashes the stock tab bar until
 // playback controls initialise. Preserve native tab/button touch handlers.
+BOOL CP26SpotifyUsesGlassDock(void) {
+    return CP26SpotifyLastStateKnown && CP26SpotifyLastState && CP26SpotifyStyleEnabled;
+}
+
+static char nativeTabKey, compactTabKey, bandKey, barAppearanceKey, managedWrapperKey;
+BOOL CP26HasCompactHeader(UITabBar *bar) { return bar && objc_getAssociatedObject(bar,&bandKey)!=nil; }
+
+static CGRect NativeTabFrame(UIView *button) {
+    NSValue *last = objc_getAssociatedObject(button,&compactTabKey);
+    NSValue *original = objc_getAssociatedObject(button,&nativeTabKey);
+    return last && original && CGRectEqualToRect(button.frame,last.CGRectValue)
+        ? original.CGRectValue : button.frame;
+}
+
 static NSArray<UIView *> *CP26SpotifyNavButtons(UITabBar *bar) {
     NSMutableArray<UIView *> *buttons=[NSMutableArray array];
     UIView *nowPlaying=nil;
@@ -160,7 +176,9 @@ static NSArray<UIView *> *CP26SpotifyNavButtons(UITabBar *bar) {
             nowPlaying=child;
     }
     if (buttons.count!=4 || bar.items.count!=4 ||
-        bar.bounds.size.width<385 || bar.bounds.size.width>445 ||
+        (bar.window.bounds.size.height<bar.window.bounds.size.width &&
+         (bar.bounds.size.width<385 || bar.bounds.size.width>445)) ||
+        bar.bounds.size.width<320 || bar.bounds.size.width>560 ||
         bar.bounds.size.height<40 || bar.bounds.size.height>55) return nil;
     // If the wrapper exists, verify it is still the original native control.
     // Without it, accept the same four-tab arrangement spanning either 100%
@@ -168,23 +186,23 @@ static NSArray<UIView *> *CP26SpotifyNavButtons(UITabBar *bar) {
     if (nowPlaying && (nowPlaying.bounds.size.width<30 ||
                        nowPlaying.bounds.size.width>48)) return nil;
     [buttons sortUsingComparator:^NSComparisonResult(UIView *a, UIView *b) {
-        if (a.frame.origin.x < b.frame.origin.x) return NSOrderedAscending;
-        if (a.frame.origin.x > b.frame.origin.x) return NSOrderedDescending;
+        if (NativeTabFrame(a).origin.x < NativeTabFrame(b).origin.x) return NSOrderedAscending;
+        if (NativeTabFrame(a).origin.x > NativeTabFrame(b).origin.x) return NSOrderedDescending;
         return NSOrderedSame;
     }];
     CGFloat barWidth=bar.bounds.size.width;
-    CGFloat lastRight=CGRectGetMaxX(buttons[3].frame);
+    CGFloat lastRight=CGRectGetMaxX(NativeTabFrame(buttons[3]));
     CGFloat trailingSpace=barWidth-lastRight;
-    if (fabs(CGRectGetMinX(buttons[0].frame))>3.0 ||
-        trailingSpace< -2.0 || trailingSpace>55.0) return nil;
+    if (fabs(CGRectGetMinX(NativeTabFrame(buttons[0])))>3.0 ||
+        trailingSpace< -2.0 || trailingSpace>MAX(55.0,barWidth*.14)) return nil;
     if (nowPlaying && fabs(lastRight-CGRectGetMinX(nowPlaying.frame))>5.0)
         return nil;
     for (NSUInteger i=0;i<buttons.count;i++) {
         UIView *b=buttons[i];
-        if (b.bounds.size.width<72 || b.bounds.size.width>105 ||
-            b.bounds.size.height<38 || b.bounds.size.height>55) return nil;
-        if (i>0 && fabs(CGRectGetMinX(b.frame)-
-                         CGRectGetMaxX(buttons[i-1].frame))>3.0) return nil;
+        if (NativeTabFrame(b).size.width<barWidth*.17 || NativeTabFrame(b).size.width>barWidth*.28 ||
+            NativeTabFrame(b).size.height<38 || NativeTabFrame(b).size.height>55) return nil;
+        if (i>0 && fabs(CGRectGetMinX(NativeTabFrame(b))-
+                         CGRectGetMaxX(NativeTabFrame(buttons[i-1])))>3.0) return nil;
     }
     return buttons;
 }
@@ -228,6 +246,10 @@ static void CP26SpotifyRestoreNavBar(UITabBar *bar) {
     CP26SpotifyNavMutating=YES;
     for (UIView *button in bar.subviews) {
         if (![NSStringFromClass(button.class) isEqualToString:@"UITabBarButton"]) continue;
+        CGRect original = NativeTabFrame(button);
+        if (!CGRectEqualToRect(original,button.frame)) button.frame = original;
+        objc_setAssociatedObject(button,&compactTabKey,nil,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(button,&nativeTabKey,nil,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         for (UIView *part in button.subviews) CP26SpotifyRestoreNavPart(part);
     }
     UIView *pill=objc_getAssociatedObject(bar,CP26SpotifyNavPillKey);
@@ -235,12 +257,28 @@ static void CP26SpotifyRestoreNavBar(UITabBar *bar) {
     // drop the remembered selection before returning all native visuals.
     [pill.layer removeAllAnimations];
     for (UIView *indicator in pill.subviews) [indicator.layer removeAllAnimations];
+    CP26RemoveMiniPlayer(bar);
+    UIView *wrapped=objc_getAssociatedObject(bar,&managedWrapperKey);
+    if (wrapped) CP26SpotifyRestoreNavPart(wrapped);
+    objc_setAssociatedObject(bar,&managedWrapperKey,nil,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    NSDictionary *appearance=objc_getAssociatedObject(bar,&barAppearanceKey);
+    if (appearance) {
+        bar.backgroundColor=appearance[@"color"]==NSNull.null ? nil : appearance[@"color"];
+        bar.opaque=[appearance[@"opaque"] boolValue];
+        for (UIView *child in bar.subviews)
+            if ([NSStringFromClass(child.class) isEqualToString:@"_UIBarBackground"]) CP26SpotifyRestoreNavPart(child);
+        objc_setAssociatedObject(bar,&barAppearanceKey,nil,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    UIView *band = objc_getAssociatedObject(bar,&bandKey);
+    [band removeFromSuperview];
+    objc_setAssociatedObject(bar,&bandKey,nil,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     [pill removeFromSuperview];
     objc_setAssociatedObject(bar,CP26SpotifyNavSelectedIndexKey,nil,
         OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     objc_setAssociatedObject(bar,CP26SpotifyNavPillKey,nil,
         OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     [CP26SpotifyStyledNavBars removeObject:bar];
+    CP26RefreshBrowseGeometry();
     CP26SpotifyNavMutating=NO;
 }
 
@@ -267,8 +305,7 @@ static BOOL CP26SpotifyIsNativeTabHighlight(UIView *part, UIView *button) {
         ![NSStringFromClass(part.class) isEqualToString:@"UIView"] ||
         part.subviews.count != 0 || part.userInteractionEnabled) return NO;
     CGRect r=part.frame;
-    return r.size.width>=55 && r.size.width<=96 &&
-        r.size.width<=button.bounds.size.width &&
+    return r.size.width>=30 && r.size.width<=105 &&
         r.size.height>=32 && r.size.height<=44 &&
         r.origin.x>=0 && r.origin.y>=0 && r.origin.y<=8 &&
         part.layer.cornerRadius>=6 && part.layer.cornerRadius<=11;
@@ -313,11 +350,11 @@ static void CP26SpotifyUpdateNavBar(UITabBar *bar) {
         pill.layer.cornerRadius=18;
         pill.clipsToBounds=YES;
         UIView *selection=[[UIView alloc] initWithFrame:CGRectZero];
-        selection.userInteractionEnabled=NO;
+        selection.tag=1; selection.userInteractionEnabled=NO;
         selection.layer.cornerRadius=14;
         [pill addSubview:selection];
         UIView *pressed=[[UIView alloc] initWithFrame:CGRectZero];
-        pressed.userInteractionEnabled=NO;
+        pressed.tag=2; pressed.userInteractionEnabled=NO;
         pressed.layer.cornerRadius=14;
         pressed.hidden=YES;
         [pill addSubview:pressed];
@@ -334,37 +371,74 @@ static void CP26SpotifyUpdateNavBar(UITabBar *bar) {
             [bar insertSubview:pill aboveSubview:nativeBackground];
         else [bar insertSubview:pill atIndex:0];
     }
-    CGFloat minX=CGRectGetMinX(buttons[0].frame),
-            maxX=CGRectGetMaxX(buttons[3].frame);
-    // The v0.2.58 selection used to start at x=0 inside the outer pill
-    // for the first tab and finish at its right edge for the last tab.
-    // Use matching outer (4 pt) and inner (4 pt) side insets instead.
-    const CGFloat outerInset=4.0;
-    const CGFloat selectionInset=8.0;
-    CGRect pillFrame=CGRectMake(minX+outerInset,4,
-        maxX-minX-2*outerInset,36);
+    CGFloat w=bar.bounds.size.width;
+    CGFloat u=MIN(w/400.0,bar.bounds.size.height/33.0), span=192*u, h=27*u;
+    UIView *wrapper=nil;
+    if (!objc_getAssociatedObject(bar,&barAppearanceKey))
+        objc_setAssociatedObject(bar,&barAppearanceKey,@{@"opaque":@(bar.opaque),
+            @"color":bar.backgroundColor ?: (id)NSNull.null},OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    bar.opaque=NO;
+    if (![bar.backgroundColor isEqual:UIColor.clearColor]) bar.backgroundColor=UIColor.clearColor;
+    for (UIView *child in bar.subviews) {
+        NSString *cls=NSStringFromClass(child.class);
+        if ([cls isEqualToString:@"CPUINowPlayingButtonWrapperView"]) wrapper=child;
+        if ([cls isEqualToString:@"_UIBarBackground"]) {
+            CP26SpotifyRememberNavPart(child); child.alpha=0;
+        }
+    }
+    BOOL expanded=CP26UpdateMiniPlayer(bar,wrapper,CGRectMake(w-165*u,0,164*u,33*u));
+    UIView *previousWrapper=objc_getAssociatedObject(bar,&managedWrapperKey);
+    if (previousWrapper && (previousWrapper!=wrapper || !expanded)) {
+        CP26SpotifyRestoreNavPart(previousWrapper);
+        objc_setAssociatedObject(bar,&managedWrapperKey,nil,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    if (expanded && wrapper) {
+        CP26SpotifyRememberNavPart(wrapper); wrapper.alpha=0;
+        objc_setAssociatedObject(bar,&managedWrapperKey,wrapper,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    CGRect pillFrame=CGRectMake(3*u,3*u,span,h);
     if (!CGRectEqualToRect(pill.frame,pillFrame)) pill.frame=pillFrame;
+    pill.layer.cornerRadius=h*.5;
     BOOL dark=bar.traitCollection.userInterfaceStyle==UIUserInterfaceStyleDark;
-    pill.backgroundColor=dark?[UIColor colorWithWhite:0.15 alpha:0.68]:
-        [UIColor colorWithWhite:1 alpha:0.58];
-    pill.layer.borderColor=(dark?[UIColor colorWithWhite:1 alpha:0.12]:
-        [UIColor colorWithWhite:0 alpha:0.07]).CGColor;
-    pill.layer.borderWidth=0.5;
+    UIView *band=objc_getAssociatedObject(bar,&bandKey);
+    if (!band) {
+        band=CP26ReferenceCanvas();
+        objc_setAssociatedObject(bar,&bandKey,band,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [bar insertSubview:band belowSubview:pill];
+        CP26RefreshBrowseGeometry();
+    }
+    CGRect bandFrame=CGRectMake(0,0,w,33*u);
+    if (!CGRectEqualToRect(band.frame,bandFrame)) band.frame=bandFrame;
+    // With a live list underneath, let its scrolling content feed both blur views.
+    band.hidden=CP26SpotifyHostHomeEnabled && CP26BrowseHasCanvas(bar.window);
+    CP26GlassPill(pill,h*.5);
+    for (NSUInteger i=0;i<buttons.count;i++) {
+        UIView *button=buttons[i];
+        CGRect original=NativeTabFrame(button);
+        // Edges of the four labels in the portrait reference, in 400-point coordinates.
+        static const CGFloat edges[] = {0,44,96,142,192};
+        CGRect compact=CGRectMake(pillFrame.origin.x+edges[i]*u,0,
+            (edges[i+1]-edges[i])*u,33*u);
+        objc_setAssociatedObject(button,&nativeTabKey,[NSValue valueWithCGRect:original],OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(button,&compactTabKey,[NSValue valueWithCGRect:compact],OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        if (!CGRectEqualToRect(button.frame,compact)) button.frame=compact;
+    }
+    CGFloat selectionInset=2.0;
     NSUInteger selected=[bar.items indexOfObjectIdenticalTo:bar.selectedItem];
     NSNumber *priorSelection=objc_getAssociatedObject(bar,CP26SpotifyNavSelectedIndexKey);
     BOOL changedSelection=priorSelection &&
         priorSelection.unsignedIntegerValue< buttons.count &&
         selected< buttons.count && priorSelection.unsignedIntegerValue!=selected;
-    UIView *selection=pill.subviews.firstObject;
+    UIView *selection=[pill viewWithTag:1];
     BOOL shouldHideSelection=selected==NSNotFound || selected>=buttons.count;
     BOOL selectionWasVisible=!selection.hidden;
     selection.hidden=shouldHideSelection;
-    selection.backgroundColor=dark?[UIColor colorWithWhite:1 alpha:0.19]:
-        [UIColor colorWithWhite:0 alpha:0.12];
+    selection.backgroundColor=[UIColor colorWithRed:.075 green:.075 blue:.11 alpha:.72];
+    selection.layer.cornerRadius=(h-6)*.5;
     if (!shouldHideSelection) {
         UIView *chosen=buttons[selected];
         CGRect destination=CGRectMake(CGRectGetMinX(chosen.frame)-pillFrame.origin.x+selectionInset,
-            4,chosen.bounds.size.width-2*selectionInset,28);
+            3,chosen.bounds.size.width-2*selectionInset,h-6);
         if (!CGRectEqualToRect(selection.frame,destination)) {
             // Never animate initial appearance, layout changes, or Reduce Motion.
             // BeginFromCurrentState lets rapid tab switches redirect a slide
@@ -394,7 +468,7 @@ static void CP26SpotifyUpdateNavBar(UITabBar *bar) {
     // temporary, rounded touch indicator of our own. Unlike the persistent
     // selected capsule it also appears when pressing a tab already selected.
     // No target/action, gesture recognizer or control state is modified.
-    UIView *pressed=pill.subviews.count>1?pill.subviews[1]:nil;
+    UIView *pressed=[pill viewWithTag:2];
     NSUInteger pressedIndex=NSNotFound;
     for (NSUInteger i=0;i<buttons.count;i++) {
         UIView *button=buttons[i];
@@ -408,10 +482,10 @@ static void CP26SpotifyUpdateNavBar(UITabBar *bar) {
     if (!pressed.hidden) {
         UIView *touched=buttons[pressedIndex];
         CGRect rect=CGRectMake(CGRectGetMinX(touched.frame)-pillFrame.origin.x+selectionInset,
-            4,touched.bounds.size.width-2*selectionInset,28);
+            3,touched.bounds.size.width-2*selectionInset,h-6);
         if (!CGRectEqualToRect(pressed.frame,rect)) pressed.frame=rect;
-        pressed.backgroundColor=[UIColor.systemBlueColor colorWithAlphaComponent:
-            dark?0.30:0.18];
+        pressed.backgroundColor=[UIColor colorWithWhite:1 alpha:dark?.16:.20];
+        pressed.layer.cornerRadius=selection.layer.cornerRadius;
     }
     for (NSUInteger i=0;i<buttons.count;i++) {
         UIView *button=buttons[i];
@@ -429,14 +503,13 @@ static void CP26SpotifyUpdateNavBar(UITabBar *bar) {
                 UILabel *label=(UILabel *)part;
                 CP26SpotifyRememberNavPart(label);
                 label.textAlignment=NSTextAlignmentCenter;
-                UIFont *pillFont=[UIFont systemFontOfSize:13 weight:UIFontWeightSemibold];
+                UIFont *pillFont=[UIFont systemFontOfSize:10*u weight:UIFontWeightMedium];
                 if (![label.font isEqual:pillFont]) label.font=pillFont;
                 CP26SpotifyCenterNavLabel(button,label);
                 // Reinstate our text colour after UIKit's pressed/selected
                 // transitions, which can otherwise temporarily turn it black.
                 BOOL active=selected==i || pressedIndex==i;
-                label.textColor=active?UIColor.systemBlueColor:
-                    (dark?UIColor.whiteColor:[UIColor colorWithWhite:0.22 alpha:1]);
+                label.textColor=[UIColor colorWithWhite:1 alpha:active ? 1 : .91];
             }
         }
     }
@@ -446,6 +519,9 @@ static void CP26SpotifyUpdateNavBar(UITabBar *bar) {
 static void CP26SpotifyVisitViews(UIView *view, NSUInteger depth, NSUInteger *budget) {
     if (!view || !*budget || depth > 22) return;
     --*budget;
+    UIResponder *owner=view.nextResponder;
+    if (CP26SpotifyHostHomeEnabled && [owner isKindOfClass:NSClassFromString(@"CPSNowPlayingViewController")] &&
+        ((UIViewController *)owner).viewIfLoaded==view) CP26PlayerLayout((UIViewController *)owner,YES);
     if ([NSStringFromClass(view.class) isEqualToString:@"CPSTableView"] &&
         CP26SpotifyHostHomeEnabled) CP26HomeTableLayout((UITableView *)view);
     if ([view isKindOfClass:UITabBar.class] && CP26SpotifyHostNavEnabled)
@@ -458,7 +534,9 @@ static void CP26SpotifyVisitViews(UIView *view, NSUInteger depth, NSUInteger *bu
 
 static void CP26SpotifyRefreshHost(void) {
     if (!NSThread.isMainThread) return;
-    CP26HomeSetEnabled(CP26SpotifyHostIsActive && CP26SpotifyHostHomeEnabled);
+    BOOL style=CP26SpotifyHostIsActive && CP26SpotifyHostHomeEnabled;
+    CP26HomeSetEnabled(style);
+    if (!style) CP26RestorePlayers();
     if (!CP26SpotifyHostIsActive || !CP26SpotifyHostNavEnabled) {
         for (UITabBar *bar in CP26SpotifyStyledNavBars.allObjects)
             CP26SpotifyRestoreNavBar(bar);
@@ -507,6 +585,17 @@ static void CP26SpotifyHostAskShell(void) {
 
 %group CP26SpotifyNavPresentation
 %hook UITabBar
+- (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
+    UITabBar *bar=(UITabBar *)self;
+    if (objc_getAssociatedObject(bar,&bandKey) && point.y>MIN(bar.bounds.size.height,bar.bounds.size.width*33/400.0)) {
+        // The idle native waveform can be taller than the new header.
+        for (UIView *child in bar.subviews)
+            if ([NSStringFromClass(child.class) isEqualToString:@"CPUINowPlayingButtonWrapperView"] &&
+                !child.hidden && child.alpha>.01 && CGRectContainsPoint(child.frame,point)) return %orig;
+        return NO;
+    }
+    return %orig;
+}
 - (void)layoutSubviews {
     %orig;
     CP26SpotifyUpdateNavBar((UITabBar *)self);
@@ -598,6 +687,27 @@ static void CP26SpotifyHostAskShell(void) {
 %end
 %end
 
+%group CP26SpotifyListCellLifecycle
+%hook UITableViewCell
+- (void)prepareForReuse {
+    CP26BrowseCellReused((UITableViewCell *)self);
+    %orig;
+}
+- (void)setHighlighted:(BOOL)highlighted animated:(BOOL)animated {
+    %orig;
+    CP26BrowseCellStateChanged((UITableViewCell *)self);
+}
+- (void)setSelected:(BOOL)selected animated:(BOOL)animated {
+    %orig;
+    CP26BrowseCellStateChanged((UITableViewCell *)self);
+}
+- (void)didUpdateFocusInContext:(UIFocusUpdateContext *)context withAnimationCoordinator:(UIFocusAnimationCoordinator *)coordinator {
+    %orig;
+    CP26BrowseCellStateChanged((UITableViewCell *)self);
+}
+%end
+%end
+
 %group CP26SpotifyHomeTable
 %hook CPSTableView
 - (void)layoutSubviews {
@@ -620,6 +730,37 @@ static void CP26SpotifyHostAskShell(void) {
 - (void)viewDidDisappear:(BOOL)animated {
     %orig;
     CP26HomeListDisappeared((UIViewController *)self);
+}
+%end
+%end
+
+%group CP26SpotifySnapshotChange
+%hook CPSListTemplateViewController
+- (void)nowPlayingManager:(id)manager didUpdateSnapshot:(id)snapshot {
+    %orig;
+    if (CP26SpotifyHostIsActive && CP26SpotifyHostNavEnabled) CP26InvalidatePlayback();
+}
+%end
+%end
+
+%group CP26SpotifyPlayerViewLayout
+%hook CPUINowPlayingView
+- (void)layoutSubviews {
+    %orig;
+    if (CP26SpotifyHostIsActive && CP26SpotifyHostHomeEnabled) CP26PlayerViewLaidOut((UIView *)self);
+}
+%end
+%end
+
+%group CP26SpotifyPlaybackScreen
+%hook CPSNowPlayingViewController
+- (void)viewDidLayoutSubviews {
+    %orig;
+    CP26PlayerLayout((UIViewController *)self,CP26SpotifyHostIsActive && CP26SpotifyHostHomeEnabled);
+}
+- (void)viewDidDisappear:(BOOL)animated {
+    %orig;
+    CP26PlayerLayout((UIViewController *)self,NO);
 }
 %end
 %end
@@ -706,6 +847,7 @@ static void CP26SpotifyHostAskShell(void) {
             if (artworkCell && listController && NSClassFromString(@"CPSTableView")) {
                 %init(CP26SpotifyArtworkRowStyle);
                 %init(CP26SpotifyHomeTable);
+                %init(CP26SpotifyListCellLifecycle);
                 %init(CP26SpotifyHomeList);
                 if (class_getInstanceMethod(listController,@selector(tableView:didSelectRowAtIndexPath:))) {
                     %init(CP26SpotifyHomeNativeSelection);
@@ -717,6 +859,15 @@ static void CP26SpotifyHostAskShell(void) {
                 if (class_getInstanceMethod(artworkCell,configure)) {
                     %init(CP26SpotifyRowConfiguration);
                 }
+            }
+            if (listController && class_getInstanceMethod(listController,@selector(nowPlayingManager:didUpdateSnapshot:))) {
+                %init(CP26SpotifySnapshotChange);
+            }
+            if (NSClassFromString(@"CPSNowPlayingViewController")) {
+                %init(CP26SpotifyPlaybackScreen);
+            }
+            if (NSClassFromString(@"CPUINowPlayingView")) {
+                %init(CP26SpotifyPlayerViewLayout);
             }
             %init(CP26SpotifyNavPresentation);
             if (NSClassFromString(@"UITabBarButton"))

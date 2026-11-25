@@ -5,9 +5,9 @@ THEOS_PACKAGE_SCHEME = roothide
 include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = CarPlay26
-CarPlay26_FILES = Tweak.xm LauncherIcon26.xm OtherFunctions.xm WallpaperProbe.xm WallpaperModelTrace.xm WallpaperBackgroundTrace.xm WallpaperAssets.m SpotifyTemplateProbe.xm SpotifyHomeStyling.xm SpotifyHomeLayout.m DashboardGlassPolish.xm
+CarPlay26_FILES = Tweak.xm LauncherIcon26.xm OtherFunctions.xm WallpaperProbe.xm WallpaperModelTrace.xm WallpaperBackgroundTrace.xm WallpaperAssets.m SpotifyTemplateProbe.xm SpotifyHomeStyling.xm SpotifyHomeLayout.m SpotifyReference.m SpotifyBrowser.m SpotifyMiniPlayer.m SpotifyPlayerScreen.m SpotifyDock.m DashboardGlassPolish.xm
 CarPlay26_CFLAGS = -fobjc-arc
-CarPlay26_FRAMEWORKS = Foundation UIKit QuartzCore CarPlay CoreGraphics
+CarPlay26_FRAMEWORKS = Foundation UIKit QuartzCore CarPlay CoreGraphics Vision ImageIO
 include $(THEOS_MAKE_PATH)/tweak.mk
 
 SUBPROJECTS += Prefs
