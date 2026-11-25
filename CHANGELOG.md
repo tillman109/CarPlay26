@@ -1,3 +1,7 @@
+# CarPlay26 v0.2.66 — Spotify Recents captions
+
+- Reads the Recents template when available and remembers titles matched to Home artwork for the next launch.
+
 # CarPlay26 v0.2.65 — Spotify Home title refresh
 
 - Rechecks visible Spotify Home rows for late-arriving titles and refreshes the title catalogue when Home reloads.

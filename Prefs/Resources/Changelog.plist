@@ -18,6 +18,14 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
+			<string>v0.2.66 — Spotify Recents captions</string>
+			<key>footerText</key>
+			<string>Reads the Recents template when available and remembers titles matched to Home artwork for the next launch.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
 			<string>v0.2.65 — Spotify Home title refresh</string>
 			<key>footerText</key>
 			<string>Rechecks visible Spotify Home rows for late-arriving titles and refreshes the title catalogue when Home reloads.</string>

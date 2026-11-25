@@ -10,6 +10,7 @@
 @protocol CP26ListHost <NSObject>
 @optional
 - (CPListTemplate *)listTemplate;
+- (CPTabBarTemplate *)tabBarTemplate;
 - (UITableView *)tableView;
 - (id)itemAtIndexPath:(NSIndexPath *)path;
 - (NSUUID *)identifier;
@@ -242,6 +243,7 @@ static CPListItem *MatchArtwork(UIImage *image, NSArray<CPListItem *> *options) 
 @property(nonatomic,strong) NSMapTable<UIImageView *,CP26RailIcon *> *railIcons;
 @property(nonatomic,strong) NSMutableDictionary<NSUUID *,CP26HomeShelf *> *shelves;
 @property(nonatomic,copy) NSArray<CPListItem *> *catalogue;
+@property(nonatomic,copy) NSDictionary *recentCaptions;
 @property(nonatomic,strong) NSMutableOrderedSet<CPListItem *> *visitedItems;
 @property(nonatomic,strong) NSMapTable<UITableViewCell *,id> *selectionBackgrounds;
 @property(nonatomic) NSUInteger revision;
@@ -297,8 +299,62 @@ static void QueueLayout(CP26HomeSession *s) {
     });
 }
 
+// A shortcut's position can change between launches. Cache only titles
+// confirmed against Recents, keyed by the Home artwork actually displayed.
+static NSString *const recentsCacheKey = @"com.tillman109.carplay26.spotify.recentsCaptions.v1";
+
+static BOOL IsRecents(CPListTemplate *list, NSString *tabTitle) {
+    for (NSString *name in @[tabTitle ?: @"", list.tabTitle ?: @"", list.title ?: @""]) {
+        if ([name caseInsensitiveCompare:@"Recents"] == NSOrderedSame) return YES;
+    }
+    return NO;
+}
+
+static void SaveRecentCaptions(CP26HomeSession *session, CPListTemplate *recent) {
+    NSMutableArray *items = [NSMutableArray array];
+    for (CPListSection *section in recent.sections) {
+        for (id item in section.items) {
+            if ([item isKindOfClass:CPListItem.class] && items.count < 192) [items addObject:item];
+        }
+    }
+    if (!items.count) return;
+    NSMutableDictionary *captions = [NSMutableDictionary dictionary];
+    NSMutableSet *conflicts = [NSMutableSet set];
+    for (CPListSection *section in List(session.home).sections) {
+        for (CPListImageRowItem *row in section.items) {
+            if (![row isKindOfClass:CPListImageRowItem.class]) continue;
+            for (UIImage *art in row.gridImages) {
+                if (captions.count >= 96) break;
+                CPListItem *match = MatchArtwork(art,items);
+                NSString *title = DisplayText(match.text);
+                if (!title) continue;
+                NSString *key = [ArtworkPrint(art) base64EncodedStringWithOptions:0];
+                if (!key || [conflicts containsObject:key]) continue;
+                if (captions[key] && ![captions[key] isEqual:title]) {
+                    [conflicts addObject:key];
+                    [captions removeObjectForKey:key];
+                } else captions[key] = title;
+            }
+        }
+    }
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    [defaults setObject:captions forKey:recentsCacheKey];
+    session.recentCaptions = captions;
+}
+
 static void UpdateCatalogue(CP26HomeSession *s) {
     NSMutableArray<CPListItem *> *catalogue = [NSMutableArray array];
+    id<CP26ListHost> host = Host(s.tabs);
+    CPTabBarTemplate *tabs = [host respondsToSelector:@selector(tabBarTemplate)] ? host.tabBarTemplate : nil;
+    if ([tabs isKindOfClass:CPTabBarTemplate.class]) {
+        for (CPListTemplate *list in tabs.templates) {
+            if (![list isKindOfClass:CPListTemplate.class] || !IsRecents(list,nil)) continue;
+            for (CPListSection *section in list.sections)
+                for (id item in section.items)
+                    if ([item isKindOfClass:CPListItem.class] && catalogue.count < 192)
+                        [catalogue addObject:item];
+        }
+    }
     for (UIViewController *child in s.tabs.viewControllers) {
         UIViewController *vc = child;
         if ([vc isKindOfClass:UINavigationController.class])
@@ -340,6 +396,7 @@ static CP26HomeSession *Session(UITableView *table) {
     s.shelves = [NSMutableDictionary dictionary];
     s.selectionBackgrounds = [NSMapTable weakToStrongObjectsMapTable];
     s.visitedItems = [NSMutableOrderedSet orderedSet];
+    s.recentCaptions = [NSUserDefaults.standardUserDefaults dictionaryForKey:recentsCacheKey];
     s.railIcons = [NSMapTable weakToStrongObjectsMapTable];
     s.nativeBackdrop = table.backgroundView;
     s.nativeSeparator = table.separatorStyle;
@@ -505,6 +562,10 @@ static NSArray<CP26HomeEntry *> *Entries(CPListImageRowItem *row, UITableViewCel
             DisplayText(metadata[@"name"]) ?:
             (index != NSNotFound && (NSUInteger)index < titles.count ? DisplayText(titles[index]) : nil) ?:
             AccessibleTitle(art,native,row.text);
+        if (!entry.title && s.recentCaptions.count) {
+            NSString *key = [ArtworkPrint(art) base64EncodedStringWithOptions:0];
+            if (key) entry.title = DisplayText(s.recentCaptions[key]);
+        }
         entry.subtitle = DisplayText(caption.detailText) ?: DisplayText(metadata[@"artist"]) ?: DisplayText(metadata[@"subtitle"]);
         entry.nativeIndex = direct ? index : NSNotFound;
         entry.detail = detail;
@@ -1051,6 +1112,9 @@ void CP26HomeListDisappeared(UIViewController *vc) {
     // Recents and Library. Match by artwork only when the match is unambiguous.
     for (CP26HomeSession *s in sessions.allObjects) {
         if (vc == s.home || vc.tabBarController != s.tabs) continue;
+        CPListTemplate *list = List(vc);
+        if (list && IsRecents(list,vc.navigationController.tabBarItem.title ?: vc.tabBarItem.title))
+            SaveRecentCaptions(s,list);
         for (CPListSection *section in List(vc).sections) {
             for (CPListItem *item in section.items) {
                 if (![item isKindOfClass:CPListItem.class] || !item.image || !DisplayText(item.text)) continue;
