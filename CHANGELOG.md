@@ -1,3 +1,7 @@
+# CarPlay26 v0.2.64 — Spotify Home labels and selections
+
+- Filters identifier-like captions, reads available image titles and reuses Spotify metadata from visited lists. Compacts shelf headings and text-only Home selections.
+
 # CarPlay26 v0.2.63 — Settings and icon
 
 - Groups the iPhone settings into Display & Startup, Dock & Shortcuts, and Home Screen & Dashboard. Spotify and Diagnostics have their own pages

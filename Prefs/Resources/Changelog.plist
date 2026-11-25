@@ -18,6 +18,14 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
+			<string>v0.2.64 — Spotify Home labels and selections</string>
+			<key>footerText</key>
+			<string>Filters identifier-like captions, reads available image titles and reuses Spotify metadata from visited lists. Compacts shelf headings and text-only Home selections.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
 			<string>v0.2.63 — Settings and icon</string>
 			<key>footerText</key>
 			<string>Groups settings by function and gives every switch an information button. The Spotify page keeps its Home, navigation and report controls together. Adds the new CarPlay26 icon to Settings</string>

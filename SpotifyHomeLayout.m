@@ -13,6 +13,7 @@
 - (UITableView *)tableView;
 - (id)itemAtIndexPath:(NSIndexPath *)path;
 - (NSUUID *)identifier;
+- (NSArray *)imageTitles;
 - (BOOL)isLimitingLists;
 - (void (^)(NSInteger))selectGridItemBlock;
 - (void (^)(void))selectTitleBlock;
@@ -168,13 +169,28 @@ static BOOL SameText(NSString *a, NSString *b) {
     return a == b || [(a ?: @"") isEqualToString:(b ?: @"")];
 }
 
+// UIKit can use the image's UUID as its spoken label on iOS 16.
+static NSString *DisplayText(id value) {
+    if (![value isKindOfClass:NSString.class]) return nil;
+    NSString *text = [value stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    if (!text.length) return nil;
+    static NSRegularExpression *identifier;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        identifier = [NSRegularExpression regularExpressionWithPattern:
+            @"^(?:[0-9a-f]{8}(?:[- ]?[0-9a-f]{4}){3}[- ]?[0-9a-f]{12}|[0-9a-f -]{24,40}|spotify:[^ ]+)$"
+            options:NSRegularExpressionCaseInsensitive error:nil];
+    });
+    return [identifier firstMatchInString:text options:0 range:NSMakeRange(0,text.length)] ? nil : text;
+}
+
 static CPListItem *MatchArtwork(UIImage *image, NSArray<CPListItem *> *options) {
     NSData *key = ArtworkPrint(image);
     if (!key) return nil;
     CPListItem *winner = nil;
     double best = INFINITY, next = INFINITY;
     for (CPListItem *candidate in options) {
-        if (!candidate.text.length) continue;
+        if (!DisplayText(candidate.text)) continue;
         double d = Difference(key, ArtworkPrint(candidate.image));
         if (d > 6.0) continue;
         BOOL same = winner && SameText(winner.text,candidate.text) &&
@@ -226,6 +242,8 @@ static CPListItem *MatchArtwork(UIImage *image, NSArray<CPListItem *> *options) 
 @property(nonatomic,strong) NSMapTable<UIImageView *,CP26RailIcon *> *railIcons;
 @property(nonatomic,strong) NSMutableDictionary<NSUUID *,CP26HomeShelf *> *shelves;
 @property(nonatomic,copy) NSArray<CPListItem *> *catalogue;
+@property(nonatomic,strong) NSMutableOrderedSet<CPListItem *> *visitedItems;
+@property(nonatomic,strong) NSMapTable<UITableViewCell *,id> *selectionBackgrounds;
 @property(nonatomic) NSUInteger revision;
 @property(nonatomic) BOOL reloadQueued;
 // This request exists only after a person opens a Home heading or picks an
@@ -293,6 +311,7 @@ static void UpdateCatalogue(CP26HomeSession *s) {
         }
     }
     for (CP26HomeShelf *shelf in s.shelves.allValues) [catalogue addObjectsFromArray:shelf.items];
+    [catalogue addObjectsFromArray:s.visitedItems.array];
     s.catalogue = catalogue;
     s.revision++;
 }
@@ -319,6 +338,8 @@ static CP26HomeSession *Session(UITableView *table) {
     s = [CP26HomeSession new];
     s.table = table; s.home = home; s.tabs = tabs; s.window = table.window;
     s.shelves = [NSMutableDictionary dictionary];
+    s.selectionBackgrounds = [NSMapTable weakToStrongObjectsMapTable];
+    s.visitedItems = [NSMutableOrderedSet orderedSet];
     s.railIcons = [NSMapTable weakToStrongObjectsMapTable];
     s.nativeBackdrop = table.backgroundView;
     s.nativeSeparator = table.separatorStyle;
@@ -350,7 +371,7 @@ static HomeMetrics Metrics(CGFloat width) {
     CGFloat u = MIN(1.1,MAX(.48,inner/482.0));
     CGFloat gap = 8*u;
     return (HomeMetrics){inset,gap,(inner-gap)/2,31*u,(inner-5*gap)/6,
-        43*u,30*u,13*u,13*u,4*u,17*u,14*u};
+        43*u,26*u,13*u,13*u,3*u,12*u,7*u};
 }
 
 static CGFloat RowHeight(CGFloat width, BOOL shortcut, NSUInteger count) {
@@ -372,7 +393,13 @@ static CGFloat ColumnWidth(UITableView *table) {
 CGFloat CP26HomeHeight(UITableView *table, NSIndexPath *path, CGFloat original) {
     CP26HomeSession *s = objc_getAssociatedObject(table,&sessionKey);
     if (!CP26HomeEnabled || !s || !HomeTabs(s.home) || Limited(table)) return original;
-    CPListImageRowItem *row = Model(table,path);
+    id model = Model(table,path);
+    if ([model isKindOfClass:CPListItem.class]) {
+        CPListItem *item = model;
+        if (!item.image && !item.detailText.length && item.text.length)
+            return MIN(original > 0 ? original : 44, 44);
+    }
+    CPListImageRowItem *row = model;
     if (![row isKindOfClass:CPListImageRowItem.class] || !row.gridImages.count) return original;
     NSUInteger count = ShelfItems(s,row).count;
     return ceil(RowHeight(ColumnWidth(table),IsShortcut(path),count ?: row.gridImages.count));
@@ -433,7 +460,7 @@ static NSString *AccessibleTitle(UIImage *image, UIControl *button, NSString *he
     for (NSString *value in @[image.accessibilityLabel ?: @"", button.accessibilityLabel ?: @""]) {
         if (![value isKindOfClass:NSString.class] || !value.length || SameText(value,heading)) continue;
         NSString *s = [value stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
-        if (s.length && ![@[@"image", @"button", @"album artwork", @"artwork", @"cover art"]
+        if (DisplayText(s) && ![@[@"image", @"button", @"album artwork", @"artwork", @"cover art"]
                 containsObject:s.lowercaseString]) return s;
     }
     return nil;
@@ -444,6 +471,13 @@ static NSArray<CP26HomeEntry *> *Entries(CPListImageRowItem *row, UITableViewCel
     NSArray<UIImage *> *images = row.gridImages;
     NSArray<CPListItem *> *details = ShelfItems(s,row);
     NSArray<UIControl *> *buttons = NativeButtons(cell);
+    NSArray *titles = [row respondsToSelector:@selector(imageTitles)] ? Host(row).imageTitles : nil;
+    if (![titles isKindOfClass:NSArray.class] || titles.count != images.count) titles = nil;
+    // Some templates carry per-image display metadata in userInfo. Only
+    // consume explicitly named fields and require a full one-to-one slot map.
+    NSDictionary *info = [row.userInfo isKindOfClass:NSDictionary.class] ? row.userInfo : nil;
+    NSArray *slots = info[@"items"];
+    if (![slots isKindOfClass:NSArray.class] || slots.count != images.count) slots = nil;
     BOOL gridAction = GridAction(cell) != nil;
     BOOL hasHeader = HeadingAction(cell) != nil || CanPress(NativeHeading(cell));
     NSMutableArray *entries = [NSMutableArray array];
@@ -465,8 +499,13 @@ static NSArray<CP26HomeEntry *> *Entries(CPListImageRowItem *row, UITableViewCel
         CPListItem *caption = detail ?: MatchArtwork(art,s.catalogue);
         CP26HomeEntry *entry = [CP26HomeEntry new];
         entry.art = art;
-        entry.title = caption.text.length ? caption.text : AccessibleTitle(art,native,row.text);
-        entry.subtitle = caption.detailText;
+        id slot = index != NSNotFound && (NSUInteger)index < slots.count ? slots[index] : nil;
+        NSDictionary *metadata = [slot isKindOfClass:NSDictionary.class] ? slot : nil;
+        entry.title = DisplayText(caption.text) ?: DisplayText(metadata[@"title"]) ?:
+            DisplayText(metadata[@"name"]) ?:
+            (index != NSNotFound && (NSUInteger)index < titles.count ? DisplayText(titles[index]) : nil) ?:
+            AccessibleTitle(art,native,row.text);
+        entry.subtitle = DisplayText(caption.detailText) ?: DisplayText(metadata[@"artist"]) ?: DisplayText(metadata[@"subtitle"]);
         entry.nativeIndex = direct ? index : NSNotFound;
         entry.detail = detail;
         entry.enabled = row.isEnabled && (!detail || detail.isEnabled);
@@ -545,7 +584,7 @@ static NSArray<CP26HomeEntry *> *Entries(CPListImageRowItem *row, UITableViewCel
     if ((self = [super initWithFrame:frame])) {
         _buttons = [NSMutableArray array];
         _alphaBefore = [NSMapTable weakToStrongObjectsMapTable];
-        _heading = [UIButton buttonWithType:UIButtonTypeSystem];
+        _heading = [UIButton buttonWithType:UIButtonTypeCustom];
         _heading.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
         _headingText = [UILabel new]; _headingText.textColor = UIColor.whiteColor;
         _headingText.isAccessibilityElement = NO;
@@ -662,10 +701,11 @@ static NSArray<CP26HomeEntry *> *Entries(CPListImageRowItem *row, UITableViewCel
     [super layoutSubviews];
     HomeMetrics m = Metrics(self.bounds.size.width);
     CGFloat u = m.tileHeight / 43;
-    self.heading.frame = CGRectMake(m.inset,0,self.bounds.size.width-2*m.inset,m.header);
+
     self.headingText.font = [UIFont systemFontOfSize:16*u weight:UIFontWeightSemibold];
-    CGFloat textWidth = MIN(MAX(0,self.heading.bounds.size.width-20*u),
+    CGFloat textWidth = MIN(MAX(0,self.bounds.size.width-2*m.inset-20*u),
         ceil([self.headingText sizeThatFits:CGSizeMake(CGFLOAT_MAX,m.header)].width));
+    self.heading.frame = CGRectMake(m.inset,0,MIN(self.bounds.size.width,textWidth+22*u),m.header);
     self.headingText.frame = CGRectMake(0,0,textWidth,m.header);
     self.chevron.frame = CGRectMake(textWidth+5*u,(m.header-12*u)/2,8*u,12*u);
     for (NSUInteger i=0; i<self.buttons.count; i++) {
@@ -882,7 +922,32 @@ static void StyleRail(CP26HomeSession *s) {
     }
 }
 
+static void RestoreSelection(CP26HomeSession *s, UITableViewCell *cell) {
+    id saved = [s.selectionBackgrounds objectForKey:cell];
+    if (!saved) return;
+    cell.backgroundConfiguration = saved == NSNull.null ? nil : saved;
+    [s.selectionBackgrounds removeObjectForKey:cell];
+}
+
+static void StyleSelection(CP26HomeSession *s, UITableViewCell *cell) {
+    CPListItem *item = Model(s.table,[s.table indexPathForCell:cell]);
+    if (![item isKindOfClass:CPListItem.class] || item.image || item.detailText.length || !item.text.length) {
+        RestoreSelection(s,cell);
+        return;
+    }
+    if (![s.selectionBackgrounds objectForKey:cell])
+        [s.selectionBackgrounds setObject:((id)cell.backgroundConfiguration ?: NSNull.null) forKey:cell];
+    UIBackgroundConfiguration *background = [UIBackgroundConfiguration clearConfiguration];
+    BOOL light = cell.traitCollection.userInterfaceStyle == UIUserInterfaceStyleLight;
+    CGFloat alpha = cell.isFocused || cell.isHighlighted || cell.isSelected ? .75 : (light ? .72 : .16);
+    background.backgroundColor = [UIColor colorWithWhite:1 alpha:alpha];
+    background.cornerRadius = 9;
+    background.backgroundInsets = NSDirectionalEdgeInsetsMake(2,2,2,2);
+    if (![cell.backgroundConfiguration isEqual:background]) cell.backgroundConfiguration = background;
+}
+
 static void Detach(CP26HomeSession *s) {
+    for (UITableViewCell *cell in s.selectionBackgrounds.keyEnumerator.allObjects) RestoreSelection(s,cell);
     UITableView *table = s.table;
     CancelRequest(s);
     for (UITableViewCell *cell in table.visibleCells) CP26HomeRestoreRow(cell);
@@ -912,8 +977,12 @@ void CP26HomeTableLayout(UITableView *table) {
     CP26HomeSession *s = Session(table);
     if (!s) return;
     StyleRail(s);
-    for (UITableViewCell *cell in table.visibleCells) {
-        if (!HostClass(cell,@"CPSImageRowCell")) continue;
+    NSArray *visible = table.visibleCells;
+    for (UITableViewCell *cell in s.selectionBackgrounds.keyEnumerator.allObjects)
+        if (![visible containsObject:cell] || !HomeTabs(s.home)) RestoreSelection(s,cell);
+    if (!HomeTabs(s.home)) return;
+    for (UITableViewCell *cell in visible) {
+        if (!HostClass(cell,@"CPSImageRowCell")) { StyleSelection(s,cell); continue; }
         CP26HomeRow *row = objc_getAssociatedObject(cell,&rowKey);
         if (!row || row.needsContent || row.revision != s.revision) CP26HomeLayoutRow(cell);
     }
@@ -937,6 +1006,18 @@ void CP26HomeListAppeared(UIViewController *vc) {
 }
 
 void CP26HomeListDisappeared(UIViewController *vc) {
+    // Retain display metadata from lists the user actually visited, including
+    // Recents and Library. Match by artwork only when the match is unambiguous.
+    for (CP26HomeSession *s in sessions.allObjects) {
+        if (vc == s.home || vc.tabBarController != s.tabs) continue;
+        for (CPListSection *section in List(vc).sections) {
+            for (CPListItem *item in section.items) {
+                if (![item isKindOfClass:CPListItem.class] || !item.image || !DisplayText(item.text)) continue;
+                [s.visitedItems addObject:item];
+                if (s.visitedItems.count > 192) [s.visitedItems removeObjectAtIndex:0];
+            }
+        }
+    }
     for (CP26HomeSession *s in sessions.allObjects)
         if (s.detailController == vc) CancelRequest(s);
 }
