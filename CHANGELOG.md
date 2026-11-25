@@ -1,3 +1,7 @@
+# CarPlay26 v0.2.67 — Liked Songs shortcut
+
+- Supplies the Liked Songs shortcut title when its confirmed heart artwork is present and Spotify provides no readable caption.
+
 # CarPlay26 v0.2.66 — Spotify Recents captions
 
 - Reads the Recents template when available and remembers titles matched to Home artwork for the next launch.

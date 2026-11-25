@@ -18,6 +18,14 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
+			<string>v0.2.67 — Liked Songs shortcut</string>
+			<key>footerText</key>
+			<string>Supplies the Liked Songs shortcut title when its confirmed heart artwork is present and Spotify provides no readable caption.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
 			<string>v0.2.66 — Spotify Recents captions</string>
 			<key>footerText</key>
 			<string>Reads the Recents template when available and remembers titles matched to Home artwork for the next launch.</string>

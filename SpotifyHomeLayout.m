@@ -158,6 +158,41 @@ static NSData *ArtworkPrint(UIImage *image) {
     return key;
 }
 
+// Central 8x8 of the 10x10 RGB print of the confirmed Liked Songs icon.
+// Ignore the rounded outer corners. Check the white heart separately so a
+// similarly coloured gradient alone cannot satisfy the artwork comparison.
+static BOOL IsLikedSongsArtwork(UIImage *art) {
+    static const uint8_t reference[8*8*3] = {
+        84,36,243, 91,47,241, 97,58,239, 105,70,238, 112,83,238, 118,95,235, 123,107,233, 129,118,232,
+        91,47,241, 98,58,240, 104,70,239, 111,82,237, 117,94,236, 124,107,234, 130,118,232, 136,129,231,
+        98,58,239, 104,69,239, 129,102,236, 152,135,231, 162,150,234, 134,123,228, 137,130,231, 142,141,229,
+        105,72,238, 111,83,237, 202,191,245, 255,254,255, 255,254,255, 169,167,222, 144,142,230, 150,154,228,
+        112,84,237, 118,96,237, 149,135,233, 247,245,253, 224,224,242, 148,148,224, 151,155,228, 157,167,227,
+        118,98,235, 124,109,235, 130,120,233, 162,159,231, 152,153,224, 152,157,228, 157,168,225, 164,180,225,
+        124,109,233, 130,120,232, 136,131,232, 144,144,229, 151,156,228, 157,169,227, 163,180,224, 170,192,223,
+        132,120,232, 138,131,231, 143,144,229, 150,157,228, 157,169,226, 164,181,224, 169,192,223, 176,203,223
+    };
+    NSData *signature = ArtworkPrint(art);
+    if (signature.length != 10*10*3) return NO;
+    const uint8_t *rgb = signature.bytes;
+    for (int flip = 0; flip < 2; flip++) {
+        unsigned total = 0, centre = 0;
+        for (int y = 0; y < 8; y++) {
+            for (int x = 0; x < 8; x++) {
+                int src = 3*((flip ? 8-y : y+1)*10+x+1);
+                int dst = 3*(y*8+x);
+                for (int c = 0; c < 3; c++) {
+                    unsigned error = abs((int)rgb[src+c]-reference[dst+c]);
+                    total += error;
+                    if (x >= 2 && x < 6 && y >= 2 && y < 6) centre += error;
+                }
+            }
+        }
+        if (total < 13*64*3 && centre < 22*16*3) return YES;
+    }
+    return NO;
+}
+
 static double Difference(NSData *a, NSData *b) {
     if (!a || !b || a.length != b.length) return INFINITY;
     const uint8_t *x = a.bytes, *y = b.bytes;
@@ -524,7 +559,7 @@ static NSString *AccessibleTitle(UIImage *image, UIControl *button, NSString *he
 }
 
 static NSArray<CP26HomeEntry *> *Entries(CPListImageRowItem *row, UITableViewCell *cell,
-                                        CP26HomeSession *s) {
+                                        CP26HomeSession *s, BOOL shortcut) {
     NSArray<UIImage *> *images = row.gridImages;
     NSArray<CPListItem *> *details = ShelfItems(s,row);
     NSArray<UIControl *> *buttons = NativeButtons(cell);
@@ -566,6 +601,7 @@ static NSArray<CP26HomeEntry *> *Entries(CPListImageRowItem *row, UITableViewCel
             NSString *key = [ArtworkPrint(art) base64EncodedStringWithOptions:0];
             if (key) entry.title = DisplayText(s.recentCaptions[key]);
         }
+        if (shortcut && !entry.title && IsLikedSongsArtwork(art)) entry.title = @"Liked Songs";
         entry.subtitle = DisplayText(caption.detailText) ?: DisplayText(metadata[@"artist"]) ?: DisplayText(metadata[@"subtitle"]);
         entry.nativeIndex = direct ? index : NSNotFound;
         entry.detail = detail;
@@ -754,7 +790,7 @@ static NSArray<CP26HomeEntry *> *Entries(CPListImageRowItem *row, UITableViewCel
 }
 
 - (void)configure {
-    NSArray *entries = Entries(self.model,self.cell,self.session);
+    NSArray *entries = Entries(self.model,self.cell,self.session,self.shortcut);
     self.entries = entries;
     self.heading.hidden = self.shortcut;
     self.headingText.text = self.model.text;
