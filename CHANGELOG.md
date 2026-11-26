@@ -1,3 +1,11 @@
+# CarPlay26 v0.2.75 — Home mini-player refresh
+
+- Refreshes Spotify track and artwork on return to the browse screen
+
+# CarPlay26 v0.2.74 — Now Playing Back transition
+
+- Keeps the styled player with its outgoing screen until navigation finishes
+
 # CarPlay26 v0.2.73 — Native dock positions
 
 - Uses the native CarPlay positions for Home, time, battery and connectivity while keeping the larger glass dock and centred apps

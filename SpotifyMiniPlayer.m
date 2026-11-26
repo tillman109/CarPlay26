@@ -48,7 +48,7 @@ static GetBundleID bundleID;
 static GetPlaying getPlaying;
 static GetInfo getInfo;
 static SendCommand sendCommand;
-static NSString *titleKey, *artworkKey;
+static NSString *titleKey, *artistKey, *artworkKey;
 static NSMutableArray<NSString *> *changeNames;
 
 static void LoadPlaybackAPI(void) {
@@ -62,6 +62,8 @@ static void LoadPlaybackAPI(void) {
         CFStringRef *artSymbol=(CFStringRef *)CFBundleGetDataPointerForName(cf,CFSTR("kMRMediaRemoteNowPlayingInfoArtworkData"));
         titleKey=titleSymbol && *titleSymbol ? (__bridge NSString *)*titleSymbol : @"kMRMediaRemoteNowPlayingInfoTitle";
         artworkKey=artSymbol && *artSymbol ? (__bridge NSString *)*artSymbol : @"kMRMediaRemoteNowPlayingInfoArtworkData";
+        CFStringRef *artist=(CFStringRef *)CFBundleGetDataPointerForName(cf,CFSTR("kMRMediaRemoteNowPlayingInfoArtist"));
+        artistKey=artist && *artist ? (__bridge NSString *)*artist : @"kMRMediaRemoteNowPlayingInfoArtist";
         changeNames=[NSMutableArray array];
         for (NSString *key in @[@"kMRMediaRemoteNowPlayingInfoDidChangeNotification",
              @"kMRMediaRemoteNowPlayingApplicationDidChangeNotification",
@@ -110,6 +112,12 @@ static BOOL SpotifyClient(CFTypeRef client) {
     return client && bundleID && [(__bridge NSString *)bundleID(client) isEqualToString:spotifyID];
 }
 
+static NSString *HostTrack(id<CP26MediaModel> snapshot) {
+    NSString *title=[snapshot respondsToSelector:@selector(title)] ? snapshot.title : nil;
+    NSString *artist=[snapshot respondsToSelector:@selector(artist)] ? snapshot.artist : nil;
+    return [NSString stringWithFormat:@"%@\n%@",title ?: @"",artist ?: @""];
+}
+
 @interface CP26MiniPlayer : UIView
 @property(nonatomic,weak) UIView *bar;
 @property(nonatomic,weak) UIViewController *context;
@@ -121,7 +129,7 @@ static BOOL SpotifyClient(CFTypeRef client) {
 @property(nonatomic,strong) UIImageView *art;
 @property(nonatomic,strong) UILabel *caption;
 @property(nonatomic,strong) NSTimer *timer;
-@property(nonatomic,copy) NSString *trackKey, *remoteTitle;
+@property(nonatomic,copy) NSString *trackKey, *remoteTitle, *remoteArtist, *queriedHostTrack;
 @property(nonatomic,strong) UIImage *remoteArt, *catalogArt;
 @property(nonatomic,strong) NSData *lastData;
 @property(nonatomic,strong) NSNumber *playing, *remotePlaying;
@@ -220,6 +228,7 @@ static BOOL SpotifyClient(CFTypeRef client) {
 - (void)refreshRemote {
     if (!self.active || !self.bar.window) return;
     self.lastQuery=CACurrentMediaTime();
+    NSString *hostAtRequest=HostTrack(Snapshot(Manager(self.bar,self.context)));
     NSUInteger token=++self.generation;
     dispatch_queue_t main=dispatch_get_main_queue();
     if (!getClient || !bundleID) { [self.bar setNeedsLayout]; return; }
@@ -240,6 +249,8 @@ static BOOL SpotifyClient(CFTypeRef client) {
             NSDictionary *info=(__bridge NSDictionary *)raw;
             id title=info[titleKey];
             self.remoteTitle=[title isKindOfClass:NSString.class] ? title : nil;
+            self.queriedHostTrack=hostAtRequest;
+            self.remoteArtist=[info[artistKey] isKindOfClass:NSString.class] ? info[artistKey] : nil;
             id art=info[artworkKey];
             NSData *bytes=[art isKindOfClass:NSData.class] ? art : nil;
             if (bytes.length>16*1024*1024) bytes=nil;
@@ -268,7 +279,12 @@ static BOOL SpotifyClient(CFTypeRef client) {
 - (BOOL)update {
     id<CP26MediaModel> manager=Manager(self.bar,self.context), snapshot=Snapshot(manager);
     NSString *title=[snapshot respondsToSelector:@selector(title)] ? snapshot.title : nil;
-    if (!title.length && self.remoteOwned) title=self.remoteTitle;
+    NSString *artist=[snapshot respondsToSelector:@selector(artist)] ? snapshot.artist : nil;
+    BOOL useRemote=self.remoteOwned && self.remoteTitle.length &&
+        (!title.length || [self.queriedHostTrack isEqualToString:HostTrack(snapshot)]);
+    BOOL matchesRemote=[title isEqualToString:self.remoteTitle] &&
+        (!artist.length || !self.remoteArtist.length || [artist isEqualToString:self.remoteArtist]);
+    if (useRemote) { title=self.remoteTitle; artist=self.remoteArtist; }
     id<CP26MediaModel> owner=(id)Owner(self.bar);
     self.wanted=title.length && ((self.openItem.enabled && self.openItem.action) ||
         [owner respondsToSelector:@selector(_nowPlayingButtonTapped)] ||
@@ -283,14 +299,13 @@ static BOOL SpotifyClient(CFTypeRef client) {
         self.trackKey=nil; self.catalog=nil; self.catalogArt=nil; self.art.image=nil;
         return NO;
     }
-    NSString *artist=[snapshot respondsToSelector:@selector(artist)] ? snapshot.artist : nil;
     NSString *key=[NSString stringWithFormat:@"%@\n%@",title,artist ?: @""];
     if (![key isEqualToString:self.trackKey]) {
         self.trackKey=key; self.catalog=nil; self.catalogArt=nil; self.art.image=nil;
     }
     self.caption.text=title;
     self.openButton.accessibilityLabel=[@"Now Playing, " stringByAppendingString:title];
-    id<CP26MediaModel> catalog=[snapshot respondsToSelector:@selector(artworkCatalog)] ? snapshot.artworkCatalog : nil;
+    id<CP26MediaModel> catalog=(!useRemote || matchesRemote) && [snapshot respondsToSelector:@selector(artworkCatalog)] ? snapshot.artworkCatalog : nil;
     if (catalog!=self.catalog && [catalog respondsToSelector:@selector(requestImageWithCompletion:)]) {
         self.catalog=catalog;
         __weak CP26MiniPlayer *weakSelf=self;
@@ -299,12 +314,12 @@ static BOOL SpotifyClient(CFTypeRef client) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 CP26MiniPlayer *p=weakSelf;
                 if (p.active && p.catalog==catalog && [p.trackKey isEqualToString:key]) {
-                    p.catalogArt=image; p.art.image=image;
+                    p.catalogArt=image; [p.bar setNeedsLayout];
                 }
             });
         }];
     }
-    UIImage *currentArt=self.catalogArt ?: ([title isEqualToString:self.remoteTitle] ? self.remoteArt : nil);
+    UIImage *currentArt=(useRemote || matchesRemote ? self.remoteArt : nil) ?: self.catalogArt;
     if (self.art.image!=currentArt) self.art.image=currentArt;
     BOOL scoped=[manager respondsToSelector:@selector(performCommandRequest:completion:)] && snapshot;
     BOOL system=self.remoteOwned && getClient && bundleID && sendCommand;

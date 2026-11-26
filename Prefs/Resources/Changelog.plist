@@ -18,6 +18,22 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
+<string>v0.2.75 — Home mini-player refresh</string>
+<key>footerText</key>
+<string>Refreshes Spotify track and artwork on return to Home</string>
+</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+<string>v0.2.74 — Now Playing Back transition</string>
+<key>footerText</key>
+<string>Keeps the styled player visible during Back navigation</string>
+</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
 <string>v0.2.73 — Native dock positions</string>
 <key>footerText</key>
 <string>Uses the native CarPlay positions for Home, time, battery and connectivity while keeping the larger glass dock and centred apps</string>

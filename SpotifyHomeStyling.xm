@@ -773,9 +773,14 @@ static void CP26SpotifyHostAskShell(void) {
 
 %group CP26SpotifyHomeList
 %hook CPSListTemplateViewController
+- (void)viewWillAppear:(BOOL)animated {
+    %orig;
+    if (CP26SpotifyHostIsActive && CP26SpotifyHostNavEnabled) CP26InvalidatePlayback();
+}
 - (void)viewDidAppear:(BOOL)animated {
     %orig;
     UIViewController *vc=(UIViewController *)self;
+    if (CP26SpotifyHostIsActive && CP26SpotifyHostNavEnabled) CP26InvalidatePlayback();
     CP26HomeListAppeared(vc);
     CP26SetHeader(vc,NO,CP26SpotifyHostIsActive && CP26SpotifyHostNavEnabled && CP26IsBrowseDetail(vc));
 }
@@ -807,6 +812,14 @@ static void CP26SpotifyHostAskShell(void) {
 
 %group CP26SpotifyPlaybackScreen
 %hook CPSNowPlayingViewController
+- (void)viewWillDisappear:(BOOL)animated {
+    CP26PlayerDeparting((UIViewController *)self,YES);
+    %orig;
+}
+- (void)viewWillAppear:(BOOL)animated {
+    %orig;
+    CP26PlayerDeparting((UIViewController *)self,NO);
+}
 - (void)viewDidAppear:(BOOL)animated {
     %orig;
     BOOL enabled=CP26SpotifyHostIsActive && CP26SpotifyHostHomeEnabled;
