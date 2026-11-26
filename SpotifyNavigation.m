@@ -22,6 +22,8 @@ BOOL CP26ActivateBarItem(UIBarButtonItem *item, UIControl *control) {
 @property(nonatomic,strong) UILabel *menuTitle;
 @property(nonatomic,strong) UIView *backGlass, *actionGlass;
 @property(nonatomic,weak) UIControl *nativeBack, *nativeAction;
+@property(nonatomic,weak) UIView *nativeActionStyled;
+@property(nonatomic,strong) UIColor *nativeActionTint, *nativeActionTitleColor;
 @property(nonatomic,weak) UIBarButtonItem *left, *right;
 @property(nonatomic,strong) NSMapTable<UIView *,NSNumber *> *suppressed;
 @property(nonatomic,strong) UIColor *originalColor;
@@ -114,8 +116,32 @@ static void RestoreUnused(CP26Header *s, NSSet *keep) {
         [s.suppressed removeObjectForKey:v];
     }
 }
+static void RestoreNativeAction(CP26Header *s) {
+    UIView *view=s.nativeActionStyled;
+    if (view) {
+        CP26RemoveGlass(view);
+        if (s.nativeActionTint) view.tintColor=s.nativeActionTint;
+        if ([view isKindOfClass:UIButton.class] && s.nativeActionTitleColor)
+            [(UIButton *)view setTitleColor:s.nativeActionTitleColor forState:UIControlStateNormal];
+    }
+    s.nativeActionStyled=nil; s.nativeActionTint=nil; s.nativeActionTitleColor=nil;
+}
+static void StyleNativeAction(CP26Header *s, UIView *view) {
+    if (s.nativeActionStyled!=view) {
+        RestoreNativeAction(s);
+        s.nativeActionStyled=view;
+        s.nativeActionTint=view.tintColor;
+        if ([view isKindOfClass:UIButton.class])
+            s.nativeActionTitleColor=[(UIButton *)view titleColorForState:UIControlStateNormal];
+    }
+    view.tintColor=UIColor.whiteColor;
+    if ([view isKindOfClass:UIButton.class])
+        [(UIButton *)view setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
+    CP26GlassPill(view,MIN(CGRectGetWidth(view.bounds),CGRectGetHeight(view.bounds))*.5);
+}
 static void Detach(CP26Header *s) {
     if (!s) return;
+    RestoreNativeAction(s);
     CP26RemoveMiniPlayer(s.bar);
     RestoreUnused(s,nil);
     if (s.clearBar) {
@@ -188,23 +214,35 @@ void CP26LayoutHeader(UINavigationBar *bar) {
                 if ([a.lowercaseString containsString:@"nowplaying"]) wave=YES;
         }
     }
-    BOOL mini=NO, showQueue=NO;
+    BOOL mini=NO, showQueue=NO, nativeQueue=NO;
     if (!s.player && wave && item.rightBarButtonItems.count<=1) {
         mini=CP26UpdateMiniPlayer(bar,s.nativeAction,s.owner,s.right,CGRectMake(w-165*u,0,164*u,33*u));
     } else CP26RemoveMiniPlayer(bar);
-    if (s.player && item.rightBarButtonItems.count<=1 && (s.nativeAction || (s.right.action && s.right.enabled))) {
+    if (s.player && item.rightBarButtonItems.count<=1) {
         NSString *title=s.right.title ?: VisibleTitle(right);
-        if (title.length) {
-            showQueue=YES;
-            UIFont *font=[UIFont systemFontOfSize:12*u weight:UIFontWeightSemibold];
-            if (![s.action.titleLabel.font isEqual:font]) s.action.titleLabel.font=font;
-            if (![s.action.currentTitle isEqualToString:title]) [s.action setTitle:title forState:UIControlStateNormal];
-            s.action.accessibilityLabel=title;
-            s.action.enabled=s.right ? s.right.enabled : s.nativeAction.enabled;
-            CGFloat width=MIN(w*.48,MAX(54*u,ceil([title sizeWithAttributes:@{NSFontAttributeName:s.action.titleLabel.font}].width)+20*u));
-            ButtonSize(s.action,s.actionGlass,CGRectMake(w-width-1*u,0,width,33*u),0,3*u);
+        if (title.length && (right || s.nativeAction || s.right)) {
+            BOOL hasAction=s.nativeAction || (s.right.action && s.right.enabled);
+            if (hasAction) {
+                showQueue=YES;
+                UIFont *font=[UIFont systemFontOfSize:12*u weight:UIFontWeightSemibold];
+                if (![s.action.titleLabel.font isEqual:font]) s.action.titleLabel.font=font;
+                if (![s.action.currentTitle isEqualToString:title]) [s.action setTitle:title forState:UIControlStateNormal];
+                s.action.accessibilityLabel=title;
+                s.action.enabled=s.right ? s.right.enabled : s.nativeAction.enabled;
+                CGFloat width=MIN(w*.48,MAX(54*u,ceil([title sizeWithAttributes:@{NSFontAttributeName:s.action.titleLabel.font}].width)+20*u));
+                // Use the same horizontal and vertical glass inset as the Back control.
+                ButtonSize(s.action,s.actionGlass,CGRectMake(w-width-1*u,0,width,33*u),2.5*u,3*u);
+                RestoreNativeAction(s);
+            } else if (right) {
+                // Some Spotify releases expose Queue and Jam as an opaque native item
+                // without a discoverable UIControl action. Style that original item in
+                // place so its own touch target and responder-chain action stay intact.
+                nativeQueue=YES;
+                StyleNativeAction(s,right);
+            }
         }
     }
+    if (!nativeQueue) RestoreNativeAction(s);
     // Keep the real menu title visible alongside the expanded playback bar.
     UILabel *original=mini && !item.titleView ? TitleIn(bar,s,item.title) : nil;
     s.menuTitle.hidden=!original;

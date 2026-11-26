@@ -1,3 +1,7 @@
+# CarPlay26 v0.2.79 — Queue and Jam glass button
+
+- Matches the Now Playing Queue and Jam button to the Back button’s glass outline and keeps native taps working when Spotify exposes no custom action
+
 # CarPlay26 v0.2.78 — Smooth continuous Home title scroll
 
 - Scrolls long Home mini-player titles at a steady pace in a seamless loop, with a small gap before the title repeats
