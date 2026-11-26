@@ -1,4 +1,4 @@
-# CarPlay26 v0.2.76 — Scrolling Home song title
+# CarPlay26 v0.2.77 — Scrolling Home song title
 
 - Scrolls long Now Playing song titles across the Home mini-player and keeps short titles stationary
 
