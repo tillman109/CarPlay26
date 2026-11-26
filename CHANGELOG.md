@@ -1,3 +1,7 @@
+# CarPlay26 v0.2.80 — Static Home titles
+
+- Keeps the duplicate marquee title and edge fade disabled when a song title fits the Home mini-player
+
 # CarPlay26 v0.2.79 — Queue and Jam glass button
 
 - Matches the Now Playing Queue and Jam button to the Back button’s glass outline and keeps native taps working when Spotify exposes no custom action

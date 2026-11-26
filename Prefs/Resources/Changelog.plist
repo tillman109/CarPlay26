@@ -18,6 +18,14 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
+			<string>v0.2.80 — Static Home titles</string>
+			<key>footerText</key>
+			<string>Keeps the duplicate marquee title and edge fade disabled when a song title fits the Home mini-player</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
 			<string>v0.2.79 — Queue and Jam glass button</string>
 			<key>footerText</key>
 			<string>Matches the Now Playing Queue and Jam button to the Back button’s glass outline and keeps native taps working when Spotify exposes no custom action</string>

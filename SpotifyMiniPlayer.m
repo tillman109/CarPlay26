@@ -375,6 +375,8 @@ static NSString *HostTrack(id<CP26MediaModel> snapshot) {
     _tickerMask.frame=_captionClip.bounds;
     CGFloat textWidth=ceil([_caption sizeThatFits:CGSizeMake(CGFLOAT_MAX,h)].width);
     BOOL needsTicker=textWidth>viewportWidth+1;
+    _captionRepeat.hidden=!needsTicker;
+    _captionClip.layer.mask=needsTicker ? _tickerMask : nil;
     CGFloat gap=12*u, cycle=textWidth+gap;
     BOOL geometryChanged=fabs(_captionWidth-textWidth)>1 || fabs(_captionViewportWidth-viewportWidth)>1;
     _captionWidth=textWidth; _captionViewportWidth=viewportWidth;
@@ -399,6 +401,7 @@ static NSString *HostTrack(id<CP26MediaModel> snapshot) {
         _ticker=nil; _captionWidth=0; _captionViewportWidth=0;
         _captionTrack.frame=CGRectMake(0,0,viewportWidth,h);
         _caption.frame=CGRectMake(0,0,viewportWidth,h);
+        _captionRepeat.frame=CGRectZero;
     }
     [CATransaction commit];
 }
