@@ -1,3 +1,7 @@
+# CarPlay26 v0.2.83 — Find Queue and Jam in navigation bar
+
+- Searches the native navigation bar first and styles the containing item, since Queue and Jam may live outside the template content view
+
 # CarPlay26 v0.2.82 — Queue and Jam native glass fix
 
 - Finds the visible Queue and Jam title across the Now Playing screen and styles its actual native control with a persistent glass capsule and white text

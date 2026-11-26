@@ -135,13 +135,11 @@ static UILabel *QueueLabelIn(UIView *view, NSUInteger depth) {
     }
     return nil;
 }
-static UIView *QueueContainer(UILabel *label) {
-    UIView *fallback=label.superview;
-    for (UIView *v=label; v; v=v.superview) {
-        if ([v isKindOfClass:UIControl.class]) return v;
-        if (v.superview && [NSStringFromClass(v.superview.class) containsString:@"BarButton"]) fallback=v.superview;
-    }
-    return fallback;
+static UIView *QueueContainer(UILabel *label, UIView *bar) {
+    if (!label || !bar) return nil;
+    UIView *branch=label;
+    while (branch.superview && branch.superview!=bar) branch=branch.superview;
+    return branch.superview==bar ? branch : nil;
 }
 static void RestoreNativeAction(CP26Header *s) {
     UIView *view=s.nativeActionStyled;
@@ -267,8 +265,12 @@ void CP26LayoutHeader(UINavigationBar *bar) {
         mini=CP26UpdateMiniPlayer(bar,s.nativeAction,s.owner,s.right,CGRectMake(w-165*u,0,164*u,33*u));
     } else CP26RemoveMiniPlayer(bar);
     if (s.player && item.rightBarButtonItems.count<=1) {
-        UILabel *queueLabel=QueueLabelIn(s.owner.viewIfLoaded,0);
-        UIView *queueView=QueueContainer(queueLabel);
+        // Queue and Jam can be a native navigation-item view rather than a child
+        // of the template controller's content view. Search the bar first.
+        UILabel *queueLabel=QueueLabelIn(bar,0);
+        if (!queueLabel) queueLabel=QueueLabelIn(s.owner.viewIfLoaded,0);
+        if (!queueLabel) queueLabel=QueueLabelIn(s.owner.navigationController.viewIfLoaded,0);
+        UIView *queueView=QueueContainer(queueLabel,bar);
         if (!queueView) queueView=right ?: (UIView *)s.nativeAction;
         NSString *title=s.right.title ?: VisibleTitle(right);
         if ((queueLabel || title.length) && queueView) {
