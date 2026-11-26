@@ -18,6 +18,14 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
+<string>v0.2.71 — Ranger dock, Spotify Home and CarLy</string>
+<key>footerText</key>
+<string>Places Home and the clock on the left and groups live signal, network and battery on the right. Styles the Spotify Home items CarPlay offers in limited mode. Draws an explicit Back chevron and hands the player to CarLy when lyrics open</string>
+</dict>
+<dict>
+<key>cell</key>
+<string>PSGroupCell</string>
+<key>label</key>
 			<string>v0.2.70 — Spotify touch targets and shared dock</string>
 			<key>footerText</key>
 			<string>Centres artwork and playback buttons over the blurred album background, aligns touch targets with their visible controls, styles pushed Spotify lists, and applies the compact bottom dock across CarPlay with Settings removed from the dock</string>

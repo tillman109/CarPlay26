@@ -656,7 +656,11 @@ static void CP26SpotifyHostAskShell(void) {
     for (UIView *part in button.subviews) {
         if ([NSStringFromClass(part.class) isEqualToString:@"UITabBarButtonLabel"] &&
             [part isKindOfClass:UILabel.class]) {
-            CP26SpotifyCenterNavLabel(button,(UILabel *)part);
+            UILabel *label=(UILabel *)part;
+            CP26SpotifyRememberNavPart(label);
+            CP26SpotifyCenterNavLabel(button,label);
+            UIControl *control=(UIControl *)button;
+            label.textColor=[UIColor colorWithWhite:1 alpha:(control.selected || control.highlighted) ? 1 : .91];
         }
     }
     CP26SpotifyHideNativeTabHighlights(button);

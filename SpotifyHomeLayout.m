@@ -465,7 +465,11 @@ static NSUInteger BrowseTab(UITableView *table) {
     return NSNotFound;
 }
 
+static NSNumber *LimitedHeight(UITableView *table, NSIndexPath *path);
 CGFloat CP26HomeHeight(UITableView *table, NSIndexPath *path, CGFloat original) {
+    if (CP26HomeEnabled && Limited(table) && HomeTabs(ListController(table))) {
+        NSNumber *height=LimitedHeight(table,path); return height ? height.doubleValue : original;
+    }
     NSUInteger tab=BrowseTab(table);
     if (tab!=NSNotFound && tab>0) {
         id item=CP26BrowseModel(table,path);
@@ -919,7 +923,196 @@ static NSArray<CP26HomeEntry *> *Entries(CPListImageRowItem *row, UITableViewCel
 }
 @end
 
+// Limited Home decorates the image buttons that CarPlay actually exposes.
+// The artwork, touch handlers, enabled state and focus all belong to those controls.
+@interface CP26LimitedHomeRow : CP26HomeRow
+@property(nonatomic,strong) UIView *canvas;
+@property(nonatomic,strong) NSMutableArray<CP26ControlTarget *> *targets;
+@property(nonatomic,strong) CP26ControlTarget *headingTarget;
+@property(nonatomic,copy) NSArray<UIControl *> *sources;
+@property(nonatomic) BOOL liveHeading, applying;
+@end
+@implementation CP26LimitedHomeRow
+- (instancetype)initWithFrame:(CGRect)frame {
+    if ((self=[super initWithFrame:frame])) {
+        self.userInteractionEnabled=NO; self.accessibilityElementsHidden=YES;
+        _canvas=CP26ReferenceCanvas(); [self insertSubview:_canvas atIndex:0];
+        _targets=[NSMutableArray array]; _headingTarget=[CP26ControlTarget new]; [self addSubview:_headingTarget];
+    }
+    return self;
+}
+- (void)layoutSubviews {
+    [super layoutSubviews]; self.canvas.frame=self.bounds;
+    for (NSUInteger i=0;i<self.buttons.count;i++) {
+        CP26HomeButton *face=self.buttons[i];
+        if (self.shortcut && self.liveHeading) face.frame=CGRectOffset(face.frame,0,Metrics(self.bounds.size.width).header);
+        self.targets[i].frame=face.frame; [self.targets[i] project];
+    }
+    self.headingTarget.frame=self.heading.frame; [self.headingTarget project];
+}
+- (void)releaseTargets {
+    for (CP26ControlTarget *target in self.targets) [target bind:nil];
+    [self.headingTarget bind:nil];
+}
+@end
+@interface CP26LimitedHomeState : NSObject
+@property(nonatomic,strong) NSHashTable<UITableViewCell *> *cells;
+@property(nonatomic,strong) NSMutableDictionary<NSIndexPath *,NSNumber *> *heights;
+@property(nonatomic,copy) NSDictionary *captions;
+@property(nonatomic) BOOL updating, queued, heightsChanged;
+@end
+@implementation CP26LimitedHomeState
+@end
+static char limitedStateKey, limitedRowKey;
+static NSHashTable<UITableView *> *limitedTables;
+static NSNumber *LimitedHeight(UITableView *t, NSIndexPath *path) {
+    CP26LimitedHomeState *s=objc_getAssociatedObject(t,&limitedStateKey);
+    return path ? s.heights[path] : nil;
+}
+static BOOL OfferedInCell(UIView *button, UITableViewCell *cell) {
+    if (CGRectIsEmpty(button.bounds)) return NO;
+    for (UIView *v=button; v; v=v.superview) {
+        if (v.hidden || v.alpha<=.01) return NO;
+        if (v==cell) return YES;
+    }
+    return NO;
+}
+static NSString *FirstTitle(UIView *v) {
+    if ([v isKindOfClass:UILabel.class]) return ((UILabel *)v).text;
+    for (UIView *child in v.subviews) { NSString *title=FirstTitle(child); if (title.length) return title; }
+    return nil;
+}
+static void ReleaseLimitedCell(UITableViewCell *cell) {
+    CP26LimitedHomeRow *row=objc_getAssociatedObject(cell,&limitedRowKey);
+    if (!row) return;
+    [row releaseTargets]; [row removeFromSuperview];
+    objc_setAssociatedObject(cell,&limitedRowKey,nil,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+static void LeaveLimited(UITableView *t) {
+    CP26LimitedHomeState *s=objc_getAssociatedObject(t,&limitedStateKey);
+    if (!s) return;
+    for (UITableViewCell *cell in s.cells.allObjects) ReleaseLimitedCell(cell);
+    objc_setAssociatedObject(t,&limitedStateKey,nil,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [limitedTables removeObject:t];
+}
+static void ScheduleLimitedHeights(UITableView *t, CP26LimitedHomeState *s) {
+    if (!s.heightsChanged || s.queued || t.tracking || t.decelerating || t.hasUncommittedUpdates) return;
+    s.queued=YES; __weak UITableView *weak=t;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UITableView *table=weak; s.queued=NO;
+        if (!table.window || objc_getAssociatedObject(table,&limitedStateKey)!=s || !Limited(table) ||
+            !s.heightsChanged || table.tracking || table.decelerating || table.hasUncommittedUpdates) return;
+        s.heightsChanged=NO;
+        [UIView performWithoutAnimation:^{ [table beginUpdates]; [table endUpdates]; }];
+    });
+}
+static void UpdateLimitedCell(UITableView *table, UITableViewCell *cell, CP26LimitedHomeState *s) {
+    NSIndexPath *path=[table indexPathForCell:cell];
+    if (!path || !HostClass(cell,@"CPSImageRowCell") || CGRectIsEmpty(cell.bounds)) return;
+    CP26LimitedHomeRow *row=objc_getAssociatedObject(cell,&limitedRowKey);
+    if (row.applying) return;
+    if (objc_getAssociatedObject(cell,&rowKey)) CP26HomeRestoreRow(cell);
+    NSMutableArray<UIControl *> *sources=[NSMutableArray array];
+    for (UIControl *v in NativeButtons(cell)) if (OfferedInCell(v,cell)) [sources addObject:v];
+    if (!sources.count || sources.count>maxTiles) {
+        ReleaseLimitedCell(cell);
+        if (s.heights[path]) { [s.heights removeObjectForKey:path]; s.heightsChanged=YES; }
+        return;
+    }
+    if (!row) {
+        row=[[CP26LimitedHomeRow alloc] initWithFrame:cell.bounds]; row.cell=cell;
+        objc_setAssociatedObject(cell,&limitedRowKey,row,OBJC_ASSOCIATION_RETAIN_NONATOMIC); [cell addSubview:row];
+    }
+    row.applying=YES;
+    if (![sources isEqualToArray:row.sources]) {
+        [row releaseTargets]; row.sources=sources;
+        while (row.buttons.count>sources.count) {
+            [row.buttons.lastObject removeFromSuperview]; [row.buttons removeLastObject];
+            [row.targets.lastObject removeFromSuperview]; [row.targets removeLastObject];
+        }
+        while (row.buttons.count<sources.count) {
+            CP26HomeButton *face=[CP26HomeButton new]; face.userInteractionEnabled=NO;
+            [row.buttons addObject:face]; [row addSubview:face];
+            CP26ControlTarget *target=[CP26ControlTarget new]; [row.targets addObject:target]; [row addSubview:target];
+        }
+    }
+    id model=CP26BrowseModel(table,path);
+    CPListImageRowItem *item=[model isKindOfClass:CPListImageRowItem.class] ? model : nil;
+    UIControl *head=NativeHeading(cell);
+    NSString *heading=FirstTitle(head) ?: DisplayText(head.accessibilityLabel) ?: FirstTitle(cell.contentView) ?: item.text;
+    row.shortcut=IsShortcut(path); row.headingText.text=heading;
+    row.liveHeading=heading.length && OfferedInCell(head,cell);
+    row.heading.hidden=!heading.length || (row.shortcut && !row.liveHeading);
+    row.chevron.hidden=!row.liveHeading;
+    [row.headingTarget bind:row.liveHeading ? head : nil];
+    CP26HomeSession *parked=objc_getAssociatedObject(table,&sessionKey);
+    NSArray *images=item.gridImages;
+    NSArray *titles=[item respondsToSelector:@selector(imageTitles)] ? Host(item).imageTitles : nil;
+    for (NSUInteger i=0;i<sources.count;i++) {
+        UIControl *source=sources[i]; CP26HomeButton *face=row.buttons[i];
+        UIButton *b=[source isKindOfClass:UIButton.class] ? (UIButton *)source : nil;
+        UIImage *art=b.currentImage ?: b.imageView.image ?: b.configuration.image;
+        NSString *title=AccessibleTitle(art,source,heading);
+        CPListItem *match=art && parked.catalogue.count ? MatchArtwork(art,parked.catalogue) : nil;
+        if (!title) title=DisplayText(match.text);
+        if (!title && art && [titles isKindOfClass:NSArray.class] && titles.count==images.count) {
+            NSInteger index=NativeIndex(art,images);
+            if (index!=NSNotFound) title=DisplayText(titles[index]);
+        }
+        if (!title && art && s.captions.count) {
+            NSString *key=[ArtworkPrint(art) base64EncodedStringWithOptions:0];
+            if (key) title=DisplayText(s.captions[key]);
+        }
+        if (!title && row.shortcut && IsLikedSongsArtwork(art)) title=@"Liked Songs";
+        if (!title && !row.shortcut && [heading.lowercaseString isEqualToString:@"your top mixes"])
+            title=MixCoverTitle(art,parked);
+        face.shortcut=row.shortcut; face.enabled=source.enabled; face.cover.image=art;
+        face.caption.text=title; face.caption.numberOfLines=row.shortcut ? 2 : 1;
+        face.byline.text=DisplayText(match.detailText); face.byline.hidden=row.shortcut || !face.byline.text.length;
+        [face setHighlighted:source.highlighted || source.focused]; [face paint];
+        [row.targets[i] bind:source];
+    }
+    if (!CGRectEqualToRect(row.frame,cell.bounds)) row.frame=cell.bounds;
+    if (cell.subviews.lastObject!=row) [cell bringSubviewToFront:row];
+    [row setNeedsLayout]; [row layoutIfNeeded];
+    CGFloat width=cell.bounds.size.width;
+    CGFloat height=ceil(RowHeight(width,row.shortcut,sources.count)+(row.shortcut && row.liveHeading ? Metrics(width).header : 0));
+    if (![s.heights[path] isEqual:@(height)]) { s.heights[path]=@(height); s.heightsChanged=YES; }
+    row.applying=NO;
+}
+static void LimitedTable(UITableView *t) {
+    CP26LimitedHomeState *s=objc_getAssociatedObject(t,&limitedStateKey);
+    if (s.updating) return;
+    if (!s) {
+        s=[CP26LimitedHomeState new]; s.cells=[NSHashTable weakObjectsHashTable]; s.heights=[NSMutableDictionary dictionary];
+        s.captions=[NSUserDefaults.standardUserDefaults dictionaryForKey:recentsCacheKey];
+        objc_setAssociatedObject(t,&limitedStateKey,s,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        if (!limitedTables) limitedTables=[NSHashTable weakObjectsHashTable]; [limitedTables addObject:t];
+    }
+    s.updating=YES;
+    NSArray *visible=t.visibleCells;
+    for (UITableViewCell *cell in s.cells.allObjects) if (![visible containsObject:cell]) {
+        ReleaseLimitedCell(cell); [s.cells removeObject:cell];
+    }
+    for (UITableViewCell *cell in visible) { [s.cells addObject:cell]; UpdateLimitedCell(t,cell,s); }
+    s.updating=NO; ScheduleLimitedHeights(t,s);
+}
+static UIView *LimitedHit(UITableView *t, CGPoint p, UIEvent *event, UIView *native) {
+    for (UIView *v=native; v && v!=t; v=v.superview)
+        if ([NSStringFromClass(v.class).lowercaseString containsString:@"scrollbar"]) return native;
+    for (UITableViewCell *cell in t.visibleCells) {
+        CP26LimitedHomeRow *row=objc_getAssociatedObject(cell,&limitedRowKey);
+        if (!row || !CGRectContainsPoint(row.bounds,[row convertPoint:p fromView:t])) continue;
+        for (CP26ControlTarget *target in row.targets) {
+            UIView *hit=[target hitTest:[target convertPoint:p fromView:t] withEvent:event]; if (hit) return hit;
+        }
+        return [row.headingTarget hitTest:[row.headingTarget convertPoint:p fromView:t] withEvent:event] ?: cell;
+    }
+    return native;
+}
+
 void CP26HomeRestoreRow(UITableViewCell *cell) {
+    ReleaseLimitedCell(cell);
     CP26HomeRow *row = objc_getAssociatedObject(cell,&rowKey);
     if (!row) return;
     for (UIView *child in row.alphaBefore.keyEnumerator)
@@ -939,13 +1132,19 @@ void CP26HomeInvalidateRow(UITableViewCell *cell) {
 void CP26HomeLayoutRow(UITableViewCell *cell) {
     if (!NSThread.isMainThread) return;
     CP26HomeRow *row = objc_getAssociatedObject(cell,&rowKey);
-    if (!CP26HomeEnabled || !CarWindow(cell.window)) { if (row) CP26HomeRestoreRow(cell); return; }
+    if (!CP26HomeEnabled || !CarWindow(cell.window)) { CP26HomeRestoreRow(cell); return; }
     UITableView *table = row.session.table;
     if (!table || ![cell isDescendantOfView:table]) {
         for (UIView *v = cell.superview; v; v = v.superview) {
             if ([v isKindOfClass:UITableView.class]) { table = (UITableView *)v; break; }
         }
     }
+    CP26LimitedHomeState *restricted=objc_getAssociatedObject(table,&limitedStateKey);
+    if (restricted && Limited(table) && HomeTabs(ListController(table))) {
+        if (!restricted.updating) { UpdateLimitedCell(table,cell,restricted); ScheduleLimitedHeights(table,restricted); }
+        return;
+    }
+    ReleaseLimitedCell(cell);
     CP26HomeSession *s = table ? objc_getAssociatedObject(table,&sessionKey) : nil;
     NSIndexPath *path = s && HomeTabs(s.home) && !Limited(table) ? [table indexPathForCell:cell] : nil;
     CPListImageRowItem *model = path ? CP26BrowseModel(table,path) : nil;
@@ -1028,6 +1227,7 @@ static CPListImageRowItem *RequestedRow(CP26HomeSession *s) {
 // Read the same rows CarPlay currently exposes, including vehicle list limits.
 // Never open a template to collect data. Only the user's own navigation arms this.
 static void ReadDetail(CP26HomeSession *s, UIViewController *vc, UITableView *table) {
+    if (Limited(table) || Limited(s.table)) { CancelRequest(s); return; }
     if (!s.requestedShelf || !DetailVisible(vc,s) || !table || table.window != s.window ||
         (s.detailController && s.detailController != vc)) return;
     NSTimeInterval elapsed = CACurrentMediaTime()-s.requestTime;
@@ -1119,8 +1319,22 @@ static void Detach(CP26HomeSession *s) {
 
 void CP26HomeTableLayout(UITableView *table) {
     if (!CP26HomeEnabled || !NSThread.isMainThread) return;
-    NSUInteger tab=BrowseTab(table);
     UIViewController *owner=ListController(table);
+    UIWindow *window=table.window;
+    BOOL portrait=CarWindow(window) && window.bounds.size.width>=320 && window.bounds.size.width<=560 &&
+        window.bounds.size.height>=window.bounds.size.width;
+    if (portrait && HomeTabs(owner) && Limited(table)) {
+        CP26HomeSession *parked=objc_getAssociatedObject(table,&sessionKey);
+        if (parked.requestedShelf) CancelRequest(parked);
+        CP26UpdateBrowseTable(table,0,CP26HasCompactHeader(owner.tabBarController.tabBar));
+        LimitedTable(table); return;
+    }
+    if (objc_getAssociatedObject(table,&limitedStateKey)) {
+        LeaveLimited(table);
+        __weak UITableView *weak=table;
+        dispatch_async(dispatch_get_main_queue(), ^{ [weak reloadData]; });
+    }
+    NSUInteger tab=BrowseTab(table);
     BOOL existingHome=tab==NSNotFound && CarWindow(table.window) && !Limited(table) && HomeTabs(owner);
     CP26UpdateBrowseTable(table,existingHome ? 0 : tab,tab!=NSNotFound && tab!=CP26BrowseDetail && CP26HasCompactHeader(owner.tabBarController.tabBar));
     if (table.tracking || table.dragging)
@@ -1149,6 +1363,7 @@ void CP26HomeTableLayout(UITableView *table) {
 void CP26HomeListAppeared(UIViewController *vc) {
     if (!CP26HomeEnabled || !NSThread.isMainThread || !CarWindow(vc.viewIfLoaded.window)) return;
     UITableView *table = NativeTable(vc);
+    if (Limited(table) && HomeTabs(vc)) { CP26HomeTableLayout(table); return; }
     CP26HomeSession *home = table ? Session(table) : nil;
     if (home) {
         CancelRequest(home);
@@ -1165,6 +1380,7 @@ void CP26HomeListAppeared(UIViewController *vc) {
 
 void CP26HomeListDisappeared(UIViewController *vc) {
     UITableView *departing=NativeTable(vc);
+    if (departing) LeaveLimited(departing);
     if (departing) CP26UpdateBrowseTable(departing,NSNotFound,NO);
     // Retain display metadata from lists the user actually visited, including
     // Recents and Library. Match by artwork only when the match is unambiguous.
@@ -1187,6 +1403,10 @@ void CP26HomeListDisappeared(UIViewController *vc) {
 
 void CP26HomeTableReloaded(UITableView *table) {
     if (!CP26HomeEnabled || !NSThread.isMainThread) return;
+    CP26LimitedHomeState *restricted=objc_getAssociatedObject(table,&limitedStateKey);
+    if (Limited(table)) {
+        [restricted.heights removeAllObjects]; [table setNeedsLayout]; return;
+    }
     CP26HomeSession *home = objc_getAssociatedObject(table,&sessionKey);
     if (home) UpdateCatalogue(home);
     // Detail lists can arrive after viewDidAppear. Recheck only while a user
@@ -1206,6 +1426,7 @@ void CP26HomeSetEnabled(BOOL enabled) {
     if (!NSThread.isMainThread || CP26HomeEnabled == enabled) return;
     CP26HomeEnabled = enabled;
     if (enabled) return;
+    for (UITableView *t in limitedTables.allObjects) { LeaveLimited(t); [t reloadData]; }
     CP26RestoreBrowseTables();
     for (CP26HomeSession *s in sessions.allObjects) {
         UITableView *table = s.table;
@@ -1216,6 +1437,8 @@ void CP26HomeSetEnabled(BOOL enabled) {
 }
 
 UIView *CP26HomeHit(UITableView *table, CGPoint p, UIEvent *event, UIView *native) {
+    if (CP26HomeEnabled && Limited(table) && HomeTabs(ListController(table)) && CGRectContainsPoint(table.bounds,p))
+        return LimitedHit(table,p,event,native);
     CP26HomeSession *s=objc_getAssociatedObject(table,&sessionKey);
     if (!s || !CP26HomeEnabled || !HomeTabs(s.home) || !CGRectContainsPoint(table.bounds,p) || Limited(table)) return native;
     for (UIView *v=native; v && v!=table; v=v.superview)
@@ -1233,6 +1456,13 @@ UIView *CP26HomeHit(UITableView *table, CGPoint p, UIEvent *event, UIView *nativ
 }
 
 void CP26HomeAppendReport(NSMutableString *report) {
+    for (UITableView *table in limitedTables.allObjects) for (UITableViewCell *cell in table.visibleCells) {
+        CP26LimitedHomeRow *row=objc_getAssociatedObject(cell,&limitedRowKey);
+        if (!row) continue;
+        [report appendFormat:@"HOME vehicleLimited=1 nativeButtons=%lu displayed=%lu\n",
+            (unsigned long)row.sources.count,(unsigned long)row.buttons.count];
+        for (UIControl *b in row.sources) CP26ReportHit(report,@"limited Home item",b);
+    }
     [report appendFormat:@"\nSPOTIFY_HOME_LAYOUT enabled=%d\n",CP26HomeEnabled];
     for (CP26HomeSession *s in sessions.allObjects) {
         if (!HomeTabs(s.home) || !CarWindow(s.table.window)) continue;

@@ -7,32 +7,42 @@
 @end
 
 @interface CP26DockState : NSObject
-@property(nonatomic,strong) NSMapTable<UIView *,NSValue *> *applied;
+@property(nonatomic,strong) NSMapTable<UIView *,NSValue *> *applied, *original;
 @property(nonatomic,strong) NSHashTable<UIView *> *touched;
 @property(nonatomic,strong) NSMapTable<UIView *,NSNumber *> *hiddenSettings;
 @property(nonatomic,weak) UIStackView *stack;
 @property(nonatomic,weak) UIControl *home;
 @property(nonatomic) CGRect surface;
+@property(nonatomic,copy) NSArray<UIView *> *status;
 @end
 @implementation CP26DockState
 @end
 static char stateKey;
 
+static CGAffineTransform OriginalTransform(CP26DockState *s, UIView *v) {
+    NSValue *last=[s.applied objectForKey:v], *base=[s.original objectForKey:v];
+    if (last && base && CGAffineTransformEqualToTransform(v.transform,last.CGAffineTransformValue))
+        return base.CGAffineTransformValue;
+    [s.original setObject:[NSValue valueWithCGAffineTransform:v.transform] forKey:v];
+    return v.transform;
+}
 static void Move(CP26DockState *s, UIView *v, UIView *root, CGPoint target, CGFloat scale) {
     if (!v.superview) return;
-    NSValue *prior=[s.applied objectForKey:v];
-    // A transition may have its own transform in flight.
-    if (!CGAffineTransformIsIdentity(v.transform) && (!prior ||
-        !CGAffineTransformEqualToTransform(v.transform,prior.CGAffineTransformValue))) return;
-    CGPoint inParent=[v.superview convertPoint:target fromView:root];
-    CGAffineTransform t=CGAffineTransformMake(scale,0,0,scale,inParent.x-v.center.x,inParent.y-v.center.y);
+    CGAffineTransform base=OriginalTransform(s,v);
+    CGAffineTransform t=CGAffineTransformMake(base.a*scale,base.b*scale,base.c*scale,base.d*scale,0,0);
+    CGPoint point=[v.superview convertPoint:target fromView:root];
+    CGPoint anchor=v.layer.anchorPoint, position=v.layer.position;
+    CGPoint offset=CGPointApplyAffineTransform(CGPointMake((.5-anchor.x)*v.bounds.size.width,
+                                                           (.5-anchor.y)*v.bounds.size.height),t);
+    t.tx=point.x-position.x-offset.x; t.ty=point.y-position.y-offset.y;
     if (!CGAffineTransformEqualToTransform(v.transform,t)) v.transform=t;
     [s.applied setObject:[NSValue valueWithCGAffineTransform:t] forKey:v]; [s.touched addObject:v];
 }
 static void RestoreMove(CP26DockState *s, UIView *v) {
-    NSValue *prior=[s.applied objectForKey:v];
-    if (prior && CGAffineTransformEqualToTransform(v.transform,prior.CGAffineTransformValue)) v.transform=CGAffineTransformIdentity;
-    [s.applied removeObjectForKey:v];
+    NSValue *last=[s.applied objectForKey:v], *base=[s.original objectForKey:v];
+    if (last && base && CGAffineTransformEqualToTransform(v.transform,last.CGAffineTransformValue))
+        v.transform=base.CGAffineTransformValue;
+    [s.applied removeObjectForKey:v]; [s.original removeObjectForKey:v];
 }
 static UIStackView *AppStack(UIView *root) {
     Class button=NSClassFromString(@"DBAppDockButton");
@@ -50,23 +60,79 @@ static void RestoreVisibility(CP26DockState *s, UIView *v) {
         [s.hiddenSettings removeObjectForKey:v];
     }
 }
+// Time and network type both use _UIStatusBarStringView. Their original
+// sides differ between left- and right-hand-drive head units.
+static BOOL IsTime(NSString *text) {
+    NSCharacterSet *digits=NSCharacterSet.decimalDigitCharacterSet;
+    NSMutableArray<NSString *> *numbers=[NSMutableArray array];
+    for (NSString *part in [text componentsSeparatedByCharactersInSet:digits.invertedSet])
+        if (part.length) [numbers addObject:part];
+    if (numbers.count!=2 && numbers.count!=3) return NO;
+    return numbers[0].length<=2 && numbers[0].integerValue<24 &&
+        numbers[1].length==2 && numbers[1].integerValue<60;
+}
+typedef NS_ENUM(NSInteger,DockItemRole) { CP26DockContainer, CP26DockClock, CP26DockSignal, CP26DockNetwork, CP26DockWiFi, CP26DockExtra, CP26DockBattery };
+static DockItemRole StatusRole(UIView *v) {
+    NSString *name=NSStringFromClass(v.class);
+    if ([name containsString:@"Battery"]) return CP26DockBattery;
+    if ([name containsString:@"CellularSignal"]) return CP26DockSignal;
+    if ([name containsString:@"Wifi"] || [name containsString:@"WiFi"]) return CP26DockWiFi;
+    if ([name containsString:@"Clock"] || [name containsString:@"TimeItem"]) return CP26DockClock;
+    if ([name containsString:@"CellularNetwork"] || [name containsString:@"DataNetwork"]) return CP26DockNetwork;
+    if ([v isKindOfClass:UILabel.class] || [name containsString:@"StringView"]) {
+        UILabel *label=[v isKindOfClass:UILabel.class] ? (UILabel *)v : nil;
+        NSString *value=label.text ?: label.attributedText.string ?: v.accessibilityLabel;
+        if (IsTime(value)) return CP26DockClock;
+        if (value.length) return CP26DockNetwork;
+    }
+    return [name hasPrefix:@"_UIStatusBar"] && ([name containsString:@"ImageView"] ||
+        [name containsString:@"Indicator"]) ? CP26DockExtra : CP26DockContainer;
+}
+static void GatherStatus(UIView *v, NSMutableArray<UIView *> *items, NSUInteger depth) {
+    if (v.hidden || v.alpha<=.01 || depth>5) return;
+    if (StatusRole(v)!=CP26DockContainer) {
+        if (!CGRectIsEmpty(v.bounds)) [items addObject:v];
+        return;
+    }
+    for (UIView *child in v.subviews) GatherStatus(child,items,depth+1);
+}
+static CGFloat NaturalWidth(CP26DockState *s, UIView *v, UIView *root) {
+    CGRect local=CGRectApplyAffineTransform(v.bounds,OriginalTransform(s,v));
+    return CGRectGetWidth([v.superview convertRect:local toView:root]);
+}
+static void ArrangeStatus(CP26DockState *s, UIView *foreground, UIView *root, CGFloat cy, CGFloat u) {
+    NSMutableArray<UIView *> *items=[NSMutableArray array];
+    for (UIView *child in foreground.subviews) GatherStatus(child,items,0);
+    [items sortWithOptions:NSSortStable usingComparator:^NSComparisonResult(UIView *a,UIView *b) {
+        NSInteger x=StatusRole(a), y=StatusRole(b);
+        return x<y ? NSOrderedAscending : x>y ? NSOrderedDescending : NSOrderedSame;
+    }];
+    NSMutableArray<UIView *> *cluster=[NSMutableArray array];
+    CGFloat sum=0;
+    for (UIView *v in items) {
+        if (StatusRole(v)==CP26DockClock) {
+            CGFloat width=NaturalWidth(s,v,root)*.83*u;
+            Move(s,v,root,CGPointMake(42*u+width*.5,cy),.83*u);
+        } else { [cluster addObject:v]; sum+=NaturalWidth(s,v,root); }
+    }
+    CGFloat edge=CGRectGetMaxX(root.bounds)-8*u, gap=2.4*u;
+    CGFloat appsRight=s.stack ? CGRectGetMaxX([s.stack convertRect:s.stack.bounds toView:root]) : CGRectGetMidX(root.bounds);
+    CGFloat scale=sum>0 ? MIN(.78*u,MAX(0,edge-appsRight-9*u-gap*MAX(0,(NSInteger)cluster.count-1))/sum) : .78*u;
+    for (UIView *v in cluster.reverseObjectEnumerator) {
+        CGFloat width=NaturalWidth(s,v,root)*scale;
+        Move(s,v,root,CGPointMake(edge-width*.5,cy),scale);
+        edge-=width+gap;
+    }
+    s.status=items;
+}
 static void StatusItems(CP26DockState *s, UIView *v, UIView *root, CGFloat cy, CGFloat u, NSUInteger depth) {
-    if (depth>6) return;
+    if (depth>8 || v.hidden || v.alpha<=.01) return;
     NSString *name=NSStringFromClass(v.class);
     if ([name isEqualToString:@"DBStatusBarHomeButton"]) {
         s.home=(UIControl *)v; Move(s,v,root,CGPointMake(19.5*u,cy),.78*u); return;
     }
     if ([name isEqualToString:@"_UIStatusBarForegroundView"]) {
-        for (UIView *part in v.subviews) {
-            CGPoint base=[part.superview convertPoint:part.center toView:root];
-            NSString *type=NSStringFromClass(part.class);
-            if ([type isEqualToString:@"_UIStatusBarStringView"] && base.x<root.bounds.size.width*.4) {
-                Move(s,part,root,CGPointMake(54.5*u,cy),.83*u);
-            } else if (base.x>root.bounds.size.width*.66 && ([type hasPrefix:@"_UIStatusBar"] || [type isEqualToString:@"_UIBatteryView"])) {
-                CGFloat right=root.bounds.size.width-8*u;
-                Move(s,part,root,CGPointMake(right+(base.x-(root.bounds.size.width-10))*.78*u,cy),.78*u);
-            }
-        }
+        ArrangeStatus(s,v,root,cy,u);
         return;
     }
     if ([v isKindOfClass:UIControl.class] || [v isKindOfClass:UIVisualEffectView.class] ||
@@ -82,14 +148,15 @@ void CP26ReferenceDock(UIWindow *window, UIView *root, CGRect surface, BOOL enab
         objc_setAssociatedObject(window,&stateKey,nil,OBJC_ASSOCIATION_RETAIN_NONATOMIC); return;
     }
     if (!s) {
-        s=[CP26DockState new]; s.applied=[NSMapTable weakToStrongObjectsMapTable]; s.touched=[NSHashTable weakObjectsHashTable];
+        s=[CP26DockState new]; s.applied=[NSMapTable weakToStrongObjectsMapTable];
+        s.original=[NSMapTable weakToStrongObjectsMapTable]; s.touched=[NSHashTable weakObjectsHashTable];
         s.hiddenSettings=[NSMapTable weakToStrongObjectsMapTable];
         objc_setAssociatedObject(window,&stateKey,s,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
     [s.touched removeAllObjects];
     CGFloat u=MIN(root.bounds.size.width/400,root.bounds.size.height/45), cy=CGRectGetMidY(surface);
     s.surface=[root convertRect:surface toView:window];
-    s.stack=AppStack(root); s.home=nil;
+    s.stack=AppStack(root); s.home=nil; s.status=nil;
     for (UIView *v in s.hiddenSettings.keyEnumerator.allObjects)
         if (![s.stack.arrangedSubviews containsObject:v]) RestoreVisibility(s,v);
     for (UIView *v in s.stack.arrangedSubviews) {
@@ -110,15 +177,12 @@ UIView *CP26DockHit(UIWindow *w, CGPoint p, UIEvent *event, UIView *native) {
     CP26DockState *s=objc_getAssociatedObject(w,&stateKey);
     if (!s || w.hidden || !w.userInteractionEnabled) return native;
     if (!CGRectContainsPoint(s.surface,p)) return nil;
-    // Preserve native overlays and the simulator's independent expand control.
-    for (UIView *v=native; v && v!=w; v=v.superview)
-        if ([v isKindOfClass:UIControl.class] && v!=s.home && (!s.stack || ![v isDescendantOfView:s.stack])) return native;
+    UIView *home=CP26HitVisibleControl(s.home,w,p,event);
+    if (home) return home;
     for (UIView *v in s.stack.arrangedSubviews) {
         UIView *hit=CP26HitVisibleControl(v,w,p,event);
         if (hit) return hit;
     }
-    UIView *home=CP26HitVisibleControl(s.home,w,p,event);
-    if (home) return home;
     if (native && ((s.home && [native isDescendantOfView:s.home]) ||
         (s.stack && [native isDescendantOfView:s.stack]))) return nil;
     return native;
@@ -128,6 +192,8 @@ void CP26DockReport(UIWindow *w, NSMutableString *out) {
     if (!s) return;
     [out appendFormat:@"COMPACT_DOCK surface=%@ hiddenSettings=%lu\n",NSStringFromCGRect(s.surface),
         (unsigned long)s.hiddenSettings.count];
+    for (UIView *v in s.status) [out appendFormat:@"DOCK role=%ld class=%@ frame=%@\n",
+        (long)StatusRole(v),NSStringFromClass(v.class),NSStringFromCGRect([v convertRect:v.bounds toView:w])];
     CP26ReportHit(out,@"dock home",s.home);
     for (UIView *v in s.stack.arrangedSubviews) if (!v.hidden) CP26ReportHit(out,@"dock app",v);
 }

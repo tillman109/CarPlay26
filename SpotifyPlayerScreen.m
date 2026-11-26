@@ -96,30 +96,12 @@ static UIImage *ButtonImage(UIButton *b) {
     return b.currentImage ?: b.configuration.image ?: b.imageView.image;
 }
 
-@interface CP26PlayerSlot : UIView
-@property(nonatomic,weak) UIView *source;
-@property(nonatomic,strong) UIImageView *glyph;
-@property(nonatomic,strong) UILabel *caption;
-@property(nonatomic,strong) UIImage *originalGlyph;
-@property(nonatomic,strong) UIView *bezel;
+@interface CP26ControlTarget ()
+@property(nonatomic,weak,readwrite) UIView *source;
 @property(nonatomic) CGAffineTransform original, applied;
 @property(nonatomic) BOOL projected;
-- (void)bind:(UIView *)source;
-- (void)project;
-- (void)restore;
 @end
-@implementation CP26PlayerSlot
-- (instancetype)initWithFrame:(CGRect)frame {
-    if ((self=[super initWithFrame:frame])) {
-        self.isAccessibilityElement=NO;
-        _bezel=[UIView new]; _bezel.userInteractionEnabled=NO; _bezel.layer.cornerCurve=kCACornerCurveContinuous;
-        _glyph=[UIImageView new]; _glyph.contentMode=UIViewContentModeScaleAspectFit;
-        _glyph.tintColor=UIColor.whiteColor;
-        _caption=PlayerLabel(UIFontWeightSemibold); _caption.userInteractionEnabled=NO;
-        [self addSubview:_bezel]; [self addSubview:_glyph]; [self addSubview:_caption];
-    }
-    return self;
-}
+@implementation CP26ControlTarget
 - (void)restore {
     UIView *v=_source;
     if (_projected && v && CGAffineTransformEqualToTransform(v.transform,_applied)) v.transform=_original;
@@ -147,6 +129,26 @@ static UIImage *ButtonImage(UIButton *b) {
 - (void)dealloc { [self restore]; }
 @end
 
+@interface CP26PlayerSlot : CP26ControlTarget
+@property(nonatomic,strong) UIImageView *glyph;
+@property(nonatomic,strong) UILabel *caption;
+@property(nonatomic,strong) UIImage *originalGlyph;
+@property(nonatomic,strong) UIView *bezel;
+@end
+@implementation CP26PlayerSlot
+- (instancetype)initWithFrame:(CGRect)frame {
+    if ((self=[super initWithFrame:frame])) {
+        self.isAccessibilityElement=NO;
+        _bezel=[UIView new]; _bezel.userInteractionEnabled=NO; _bezel.layer.cornerCurve=kCACornerCurveContinuous;
+        _glyph=[UIImageView new]; _glyph.contentMode=UIViewContentModeScaleAspectFit;
+        _glyph.tintColor=UIColor.whiteColor;
+        _caption=PlayerLabel(UIFontWeightSemibold); _caption.userInteractionEnabled=NO;
+        [self addSubview:_bezel]; [self addSubview:_glyph]; [self addSubview:_caption];
+    }
+    return self;
+}
+@end
+
 @interface CP26PlayerSurface : UIView
 @property(nonatomic,weak) UIViewController *controller;
 @property(nonatomic,weak) UIView *host;
@@ -157,7 +159,9 @@ static UIImage *ButtonImage(UIButton *b) {
 @property(nonatomic,strong) NSMutableArray<CP26PlayerSlot *> *main, *modes;
 @property(nonatomic,strong) CP26PlayerSlot *seek, *albumTap;
 @property(nonatomic,strong) NSTimer *timer;
-@property(nonatomic) BOOL applying;
+@property(nonatomic) BOOL applying, lyricsVisible;
+@property(nonatomic,weak) UIViewController *nativeOwner;
+@property(nonatomic,weak) UIControl *microphone;
 @end
 static char playerKey, hostKey;
 static NSHashTable<UIViewController *> *controllers;
@@ -182,10 +186,26 @@ static BOOL PlayerFront(UIViewController *vc) {
     for (UIViewController *p=vc; p; p=p.parentViewController) if (p==top) return YES;
     return NO;
 }
+// carLy stores its customizer on CPUINowPlayingViewController, which can
+// be a child of the template controller. This lookup never attaches one.
+@protocol CP26LyricsLayout <NSObject>
+@optional
++ (id)customizerForViewController:(UIViewController *)owner create:(BOOL)create;
+- (BOOL)isFullScreen;
+- (CGFloat)playerColumnWidth;
+- (CGFloat)playerStripHeight;
+- (UIButton *)microphoneButton;
+@end
+static UIViewController *NativeOwner(UIView *host, UIViewController *outer) {
+    for (UIResponder *r=host; r; r=r.nextResponder)
+        if ([r isKindOfClass:NSClassFromString(@"CPUINowPlayingViewController")]) return (UIViewController *)r;
+    return outer;
+}
 static void Unmount(UIViewController *vc) {
     CP26PlayerSurface *s=objc_getAssociatedObject(vc,&playerKey);
     if (!s) return;
     [s.timer invalidate];
+    [s.microphone removeTarget:s action:@selector(micAction:) forControlEvents:UIControlEventTouchUpInside | UIControlEventPrimaryActionTriggered];
     for (CP26PlayerSlot *slot in s.main) [slot restore];
     for (CP26PlayerSlot *slot in s.modes) [slot restore];
     [s.seek restore]; [s.albumTap restore];
@@ -324,10 +344,41 @@ static NSString *ClockText(double seconds, BOOL negative) {
     [_seek bind:source]; _seek.hidden=!source;
     SetFrame(_seek,CGRectMake(x,y-9*uy,width,18*uy)); [_seek project];
 }
+- (void)micAction:(UIControl *)sender {
+    __weak CP26PlayerSurface *weak=self;
+    dispatch_async(dispatch_get_main_queue(), ^{ [weak refresh]; });
+}
+- (BOOL)updateLyricsPresentation {
+    Class cls=NSClassFromString(@"CLLayoutCustomizer");
+    id<CP26LyricsLayout> layout=[cls respondsToSelector:@selector(customizerForViewController:create:)] ?
+        [(Class<CP26LyricsLayout>)cls customizerForViewController:_nativeOwner create:NO] : nil;
+    UIControl *mic=[layout respondsToSelector:@selector(microphoneButton)] ? layout.microphoneButton : nil;
+    if (_microphone!=mic) {
+        UIControlEvents events=UIControlEventTouchUpInside | UIControlEventPrimaryActionTriggered;
+        [_microphone removeTarget:self action:@selector(micAction:) forControlEvents:events];
+        _microphone=mic; [mic addTarget:self action:@selector(micAction:) forControlEvents:events];
+    }
+    BOOL shown=_host.hidden || ([layout respondsToSelector:@selector(isFullScreen)] && layout.isFullScreen) ||
+        ([layout respondsToSelector:@selector(playerColumnWidth)] && layout.playerColumnWidth>0) ||
+        ([layout respondsToSelector:@selector(playerStripHeight)] && layout.playerStripHeight>0);
+    if (!shown) for (UIView *v in _nativeOwner.viewIfLoaded.subviews)
+        if (!v.hidden && v.alpha>.01 && [v isKindOfClass:NSClassFromString(@"CLLyricsFullScreenView")]) { shown=YES; break; }
+    if (_lyricsVisible!=shown) {
+        _lyricsVisible=shown;
+        if (shown) {
+            for (CP26PlayerSlot *slot in _main) [slot restore];
+            for (CP26PlayerSlot *slot in _modes) [slot restore];
+            [_seek restore]; [_albumTap restore];
+        }
+        self.hidden=shown;
+    }
+    return shown;
+}
 - (void)refresh {
     UIView *v=_host;
     if (!v || _applying || !self.window) return;
     _applying=YES;
+    if ([self updateLyricsPresentation]) { _applying=NO; return; }
     CGFloat w=self.bounds.size.width,h=self.bounds.size.height, ux=w/400,uy=h/381.5;
     id<CP26PlaybackViews> host=(id)v;
     UIView *brick=host.artworkViewBrick, *details=host.songDetailsView, *transport=host.transportControlView;
@@ -382,7 +433,8 @@ static NSString *ClockText(double seconds, BOOL negative) {
     _applying=NO;
 }
 - (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
-    if (self.hidden || !CGRectContainsPoint(self.bounds,point) || !PlayerFront(self.controller)) return nil;
+    if (self.hidden || !CGRectContainsPoint(self.bounds,point) || !PlayerFront(self.controller) ||
+        [self updateLyricsPresentation]) return nil;
     // The glass is in front of the native body. Route to the original view
     // directly because its old parent may no longer enclose the new target.
     for (UIView *slot in self.subviews.reverseObjectEnumerator) {
@@ -414,7 +466,7 @@ void CP26PlayerLayout(UIViewController *vc, BOOL enabled) {
     UINavigationBar *bar=vc.navigationController.navigationBar;
     UIView *parent=bar.window==win && bar.superview==vc.navigationController.viewIfLoaded && !bar.hidden ? bar.superview : vc.viewIfLoaded;
     if (!s) {
-        s=[CP26PlayerSurface new]; s.host=host; s.controller=vc;
+        s=[CP26PlayerSurface new]; s.host=host; s.controller=vc; s.nativeOwner=NativeOwner(host,vc);
         objc_setAssociatedObject(vc,&playerKey,s,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         objc_setAssociatedObject(host,&hostKey,s,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         if (!controllers) controllers=[NSHashTable weakObjectsHashTable]; [controllers addObject:vc];
@@ -428,8 +480,15 @@ void CP26PlayerLayout(UIViewController *vc, BOOL enabled) {
         }];
         s.timer.tolerance=.06;
     }
+    UIView *root=s.nativeOwner.viewIfLoaded, *branch=host;
+    while (branch && branch.superview!=root) branch=branch.superview;
+    CGRect box=[root convertRect:root.bounds toView:win];
+    CGRect body=CGRectMake(0,0,w,h-34.5*w/400);
+    if (branch && root.window==win && CGRectGetMinX(box)<=1 && CGRectGetMaxX(box)>=w-1 &&
+        (!root.clipsToBounds || CGRectContainsRect(CGRectInset(box,-1,-1),body))) parent=root;
     if (s.superview!=parent) {
-        if (parent==bar.superview) [parent insertSubview:s belowSubview:bar];
+        if (parent==root && branch) [parent insertSubview:s aboveSubview:branch];
+        else if (parent==bar.superview) [parent insertSubview:s belowSubview:bar];
         else [parent addSubview:s];
     }
     SetFrame(s,[parent convertRect:CGRectMake(0,0,w,h-34.5*w/400) fromView:win]);
@@ -449,6 +508,8 @@ void CP26FullPlayerReport(NSMutableString *out) {
         [out appendFormat:@"PLAYER artwork=%@ progress=%@ albumBlur=%d modeCount=%lu\n",
             NSStringFromCGRect([s.cover convertRect:s.cover.bounds toView:s.window]),
             NSStringFromCGRect([s.rail convertRect:s.rail.bounds toView:s.window]),s.cover.image!=nil,(unsigned long)s.modes.count];
+        [out appendFormat:@"LYRICS ownsPlayer=%d visibleSurface=%d\n",s.lyricsVisible,!s.hidden];
+        if (s.lyricsVisible) continue;
         NSArray *names=@[@"previous",@"play/pause",@"next"];
         for (NSUInteger i=0;i<s.main.count;i++) CP26ReportHit(out,names[i],s.main[i].source);
         for (NSUInteger i=0;i<s.modes.count;i++) CP26ReportHit(out,[NSString stringWithFormat:@"mode %lu",(unsigned long)i],s.modes[i].source);

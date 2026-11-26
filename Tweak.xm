@@ -943,6 +943,16 @@ static BOOL ProtectRegisteredDockLayer(CALayer *layer) {
 %end
 %end
 
+%group DockStatusLayout
+%hook _UIStatusBarForegroundView
+- (void)layoutSubviews {
+    %orig;
+    UIWindow *w=((UIView *)self).window;
+    if (DockRoot(w)) PrimeLocalDock(w);
+}
+%end
+%end
+
 %group DockWindowLifecycle
 %hook DBStatusBarWindow
 - (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
@@ -1737,6 +1747,7 @@ static void CP26RequestWallpaperReports(void) {
         if (dockGlassEnabled) { %init(DockBackingColorGuard); }
         if (dockGlassEnabled && NSClassFromString(@"DBRootStatusBarViewController")) { %init(DockLifecycle); }
         if (dockGlassEnabled && NSClassFromString(@"DBStatusBarWindow")) { %init(DockWindowLifecycle); }
+        if (dockGlassEnabled && NSClassFromString(@"_UIStatusBarForegroundView")) { %init(DockStatusLayout); }
         if (dockGlassEnabled && NSClassFromString(@"DBIconScrollView")) { %init(DockScrollLifecycle); }
         dispatch_async(dispatch_get_main_queue(), ^{
             dockOverlays = [NSMapTable weakToStrongObjectsMapTable];

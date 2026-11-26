@@ -1,5 +1,6 @@
 #import "SpotifyReference.h"
 #import <objc/runtime.h>
+#import <QuartzCore/QuartzCore.h>
 
 // Actions belong to the template. Some system bar items dispatch through the
 // responder chain, others install their action on a custom native control.
@@ -26,7 +27,7 @@ BOOL CP26ActivateBarItem(UIBarButtonItem *item, UIControl *control) {
 @property(nonatomic,strong) UIColor *originalColor;
 @property(nonatomic) BOOL originalOpaque, clearBar;
 @property(nonatomic) BOOL player, applying;
-@property(nonatomic) CGFloat backUnit;
+@property(nonatomic,strong) CAShapeLayer *chevron;
 @end
 static char headerKey;
 static NSHashTable<UINavigationBar *> *headerBars;
@@ -43,6 +44,7 @@ static BOOL IsFront(UIViewController *vc) {
     if (CP26ActivateBarItem(self.left,self.nativeBack)) return;
     UINavigationController *nav=self.owner.navigationController;
     if (nav.viewControllers.count>1) [nav popViewControllerAnimated:YES];
+    else if (nav.presentingViewController) [nav dismissViewControllerAnimated:YES completion:nil];
 }
 - (void)performRight {
     if (IsFront(self.owner)) CP26ActivateBarItem(self.right,self.nativeAction);
@@ -125,7 +127,8 @@ static void Detach(CP26Header *s) {
     objc_setAssociatedObject(s.bar,&headerKey,nil,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 static UIButton *HeaderButton(CP26Header *s, SEL action, UIView **glass) {
-    UIButton *b=[UIButton buttonWithType:UIButtonTypeSystem]; b.tintColor=UIColor.whiteColor;
+    UIButton *b=[UIButton buttonWithType:UIButtonTypeCustom]; b.tintColor=UIColor.whiteColor;
+    b.backgroundColor=UIColor.clearColor; b.opaque=NO; b.overrideUserInterfaceStyle=UIUserInterfaceStyleDark;
     [b setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
     UIView *fill=[UIView new]; fill.userInteractionEnabled=NO;
     [b insertSubview:fill atIndex:0]; *glass=fill;
@@ -155,14 +158,24 @@ void CP26LayoutHeader(UINavigationBar *bar) {
     CGFloat u=MIN(w/400,bar.bounds.size.height/33);
     if (u<=0) { s.applying=NO; return; }
     NSMutableSet *keep=[NSMutableSet set];
-    BOOL back=left || s.left || (!item.hidesBackButton && s.owner.navigationController.viewControllers.count>1);
+    BOOL back=left || s.left || (!item.hidesBackButton && s.owner.navigationController.viewControllers.count>1) ||
+        (s.player && s.owner.navigationController.presentingViewController!=nil);
     s.back.hidden=!back;
     if (back) {
         ButtonSize(s.back,s.backGlass,CGRectMake(0,0,33*u,33*u),2.5*u,3*u);
-        if (s.backUnit!=u) {
-            s.backUnit=u;
-            [s.back setImage:[UIImage systemImageNamed:@"chevron.left" withConfiguration:
-                [UIImageSymbolConfiguration configurationWithPointSize:12*u weight:UIImageSymbolWeightBold]] forState:UIControlStateNormal];
+        CGFloat side=14*u;
+        if (!s.chevron) {
+            CAShapeLayer *mark=[CAShapeLayer layer]; mark.fillColor=nil; mark.strokeColor=UIColor.whiteColor.CGColor;
+            mark.lineCap=kCALineCapRound; mark.lineJoin=kCALineJoinRound; mark.zPosition=1;
+            [s.back.layer addSublayer:mark]; s.chevron=mark;
+        }
+        CGRect markFrame=CGRectMake((s.back.bounds.size.width-side)/2,(s.back.bounds.size.height-side)/2,side,side);
+        if (!CGRectEqualToRect(s.chevron.frame,markFrame) || !s.chevron.path) {
+            UIBezierPath *path=[UIBezierPath bezierPath];
+            [path moveToPoint:CGPointMake(side*.63,side*.18)]; [path addLineToPoint:CGPointMake(side*.32,side*.50)];
+            [path addLineToPoint:CGPointMake(side*.63,side*.82)];
+            [CATransaction begin]; [CATransaction setDisableActions:YES];
+            s.chevron.frame=markFrame; s.chevron.lineWidth=2*u; s.chevron.path=path.CGPath; [CATransaction commit];
         }
         s.back.accessibilityLabel=s.nativeBack.accessibilityLabel ?: s.left.accessibilityLabel ?: @"Back";
         Suppress(s,left,keep);

@@ -135,7 +135,9 @@ static BOOL SpotifyClient(CFTypeRef client) {
 
 @implementation CP26MiniPlayer
 - (UIButton *)button:(NSString *)label action:(SEL)action {
-    UIButton *button=[UIButton buttonWithType:UIButtonTypeSystem];
+    UIButton *button=[UIButton buttonWithType:UIButtonTypeCustom];
+    button.backgroundColor=UIColor.clearColor; button.opaque=NO;
+    button.overrideUserInterfaceStyle=UIUserInterfaceStyleDark;
     button.tintColor=UIColor.whiteColor;
     button.accessibilityLabel=label;
     [button addTarget:self action:action forControlEvents:UIControlEventPrimaryActionTriggered];

@@ -30,7 +30,7 @@
 			<key>cellClass</key>
 			<string>CP26InfoSwitchCell</string>
 			<key>CP26Help</key>
-			<string>Styles all four portrait tabs, their nested lists and the full player. Tap a Home shelf heading or hold a shortcut to open its full list</string>
+<string>Styles all four portrait tabs, their nested lists and the full player. CarPlay’s limited Home list uses the native items and actions available in that mode. When parked, tap a shelf heading or hold a shortcut to open its full list</string>
 		</dict>
 		<dict>
 			<key>cell</key>

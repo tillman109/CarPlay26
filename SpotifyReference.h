@@ -50,3 +50,10 @@ void CP26ReferenceDock(UIWindow *window, UIView *root, CGRect surface, BOOL enab
 - (void)restoreView:(UIView *)view;
 - (void)restore;
 @end
+
+@interface CP26ControlTarget : UIView
+@property(nonatomic,weak,readonly) UIView *source;
+- (void)bind:(UIView *)source;
+- (void)project;
+- (void)restore;
+@end

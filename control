@@ -1,8 +1,8 @@
 Package: com.tillman109.carplay26
 Name: CarPlay26
-Version: 0.2.70
+Version: 0.2.71
 Architecture: iphoneos-arm64e
-Description: CarPlay26 with centred Spotify playback controls, nested menu styling and a shared compact glass dock.
+Description: CarPlay26 with a fixed left Home button, Spotify styling for limited lists and CarLy player compatibility.
 Maintainer: CarPlay26 Project
 Author: CarPlay26 Project
 Section: Tweaks

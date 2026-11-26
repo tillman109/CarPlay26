@@ -1,3 +1,9 @@
+# CarPlay26 v0.2.71 — Ranger dock, Spotify Home and CarLy
+
+- Places Home and the clock on the left of bottom docks in both drive configurations and measures live status items from the right edge
+- Keeps the Spotify Home shelf appearance when the car supplies a limited list and uses the original visible controls for taps and focus
+- Draws the Back chevron explicitly in light and dark appearances and restores Spotify’s player when CarLy leaves its lyrics layout
+
 # CarPlay26 v0.2.70 — Spotify touch targets and shared dock
 
 - Gives the shared bottom dock the compact glass appearance across the app grid, Dashboard and apps. Removes Settings from the dock and honours the existing pinned app choice
