@@ -126,8 +126,9 @@ static NSString *HostTrack(id<CP26MediaModel> snapshot) {
 @property(nonatomic,strong) UIView *glass;
 @property(nonatomic,strong) UIButton *openButton, *transport, *next;
 @property(nonatomic,strong) UIImageView *art;
-@property(nonatomic,strong) UILabel *caption;
-@property(nonatomic,strong) UIView *captionClip;
+@property(nonatomic,strong) UILabel *caption, *captionRepeat;
+@property(nonatomic,strong) UIView *captionClip, *captionTrack;
+@property(nonatomic,strong) CAGradientLayer *tickerMask;
 @property(nonatomic,strong) CABasicAnimation *ticker;
 @property(nonatomic) CGFloat captionWidth;
 @property(nonatomic) CGFloat captionViewportWidth;
@@ -166,11 +167,19 @@ static NSString *HostTrack(id<CP26MediaModel> snapshot) {
         _art.contentMode=UIViewContentModeScaleAspectFill; _art.userInteractionEnabled=NO;
         _captionClip=[UIView new]; _captionClip.clipsToBounds=YES;
         _captionClip.userInteractionEnabled=NO;
+        _tickerMask=[CAGradientLayer layer];
+        _tickerMask.startPoint=CGPointMake(0,.5); _tickerMask.endPoint=CGPointMake(1,.5);
+        _tickerMask.colors=@[(id)UIColor.clearColor.CGColor,(id)UIColor.blackColor.CGColor,
+            (id)UIColor.blackColor.CGColor,(id)UIColor.clearColor.CGColor];
+        _tickerMask.locations=@[@0,@.07,@.93,@1];
+        _captionClip.layer.mask=_tickerMask;
+        _captionTrack=[UIView new]; _captionTrack.userInteractionEnabled=NO;
         _caption=[UILabel new]; _caption.textColor=UIColor.whiteColor;
-        _caption.lineBreakMode=NSLineBreakByClipping;
-        _caption.numberOfLines=1;
-        _caption.clipsToBounds=NO;
-        [_captionClip addSubview:_caption];
+        _caption.lineBreakMode=NSLineBreakByClipping; _caption.numberOfLines=1;
+        _captionRepeat=[UILabel new]; _captionRepeat.textColor=UIColor.whiteColor;
+        _captionRepeat.lineBreakMode=NSLineBreakByClipping; _captionRepeat.numberOfLines=1;
+        [_captionTrack addSubview:_caption]; [_captionTrack addSubview:_captionRepeat];
+        [_captionClip addSubview:_captionTrack];
         [_openButton addSubview:_art]; [_openButton addSubview:_captionClip];
         self.accessibilityElements=@[_openButton,_transport,_next];
         __weak CP26MiniPlayer *weakSelf=self;
@@ -306,10 +315,14 @@ static NSString *HostTrack(id<CP26MediaModel> snapshot) {
     NSString *key=[NSString stringWithFormat:@"%@\n%@",title,artist ?: @""];
     if (![key isEqualToString:self.trackKey]) {
         self.trackKey=key; self.catalog=nil; self.catalogArt=nil; self.art.image=nil;
-        [self.caption.layer removeAnimationForKey:@"CP26HomeTitleScroll"];
+        [self.captionTrack.layer removeAnimationForKey:@"CP26HomeTitleScroll"];
         self.ticker=nil; self.captionWidth=0;
     }
-    self.caption.text=title;
+    if (![self.caption.text isEqualToString:title]) {
+        self.caption.text=title; self.captionRepeat.text=title;
+        [self.captionTrack.layer removeAnimationForKey:@"CP26HomeTitleScroll"];
+        self.ticker=nil; self.captionWidth=0;
+    }
     [self setNeedsLayout];
     self.openButton.accessibilityLabel=[@"Now Playing, " stringByAppendingString:title];
     id<CP26MediaModel> catalog=(!useRemote || matchesRemote) && [snapshot respondsToSelector:@selector(artworkCatalog)] ? snapshot.artworkCatalog : nil;
@@ -353,32 +366,38 @@ static NSString *HostTrack(id<CP26MediaModel> snapshot) {
     _transport.frame=CGRectMake(w-2*button,0,button,h);
     _next.frame=CGRectMake(w-button,0,button,h);
     _art.frame=CGRectMake(left,(h-artwork)/2,artwork,artwork);
-    _caption.font=[UIFont systemFontOfSize:9.7*u weight:UIFontWeightSemibold];
+    UIFont *font=[UIFont systemFontOfSize:9.7*u weight:UIFontWeightSemibold];
+    _caption.font=font; _captionRepeat.font=font;
     CGFloat x=left+artwork+6*u;
     CGFloat viewportWidth=MAX(1,_openButton.bounds.size.width-x-1.5*u);
     _captionClip.frame=CGRectMake(x,0,viewportWidth,h);
     [CATransaction begin]; [CATransaction setDisableActions:YES];
+    _tickerMask.frame=_captionClip.bounds;
     CGFloat textWidth=ceil([_caption sizeThatFits:CGSizeMake(CGFLOAT_MAX,h)].width);
     BOOL needsTicker=textWidth>viewportWidth+1;
+    CGFloat gap=12*u, cycle=textWidth+gap;
     BOOL geometryChanged=fabs(_captionWidth-textWidth)>1 || fabs(_captionViewportWidth-viewportWidth)>1;
     _captionWidth=textWidth; _captionViewportWidth=viewportWidth;
-    _caption.frame=CGRectMake(0,0,MAX(textWidth,viewportWidth),h);
+    _caption.frame=CGRectMake(0,0,textWidth,h);
+    _captionRepeat.frame=CGRectMake(textWidth+gap,0,textWidth,h);
+    _captionTrack.frame=CGRectMake(0,0,needsTicker ? textWidth*2+gap : viewportWidth,h);
     if (needsTicker) {
-        if (geometryChanged || !_ticker || ![_caption.layer animationForKey:@"CP26HomeTitleScroll"]) {
-            [_caption.layer removeAnimationForKey:@"CP26HomeTitleScroll"];
-            CABasicAnimation *scroll=[CABasicAnimation animationWithKeyPath:@"position.x"];
-            scroll.fromValue=@(viewportWidth/2);
-            scroll.toValue=@(viewportWidth/2-MAX(1,textWidth-viewportWidth));
-            scroll.beginTime=CACurrentMediaTime()+1.1;
-            scroll.duration=MAX(4,(textWidth-viewportWidth)/12.0);
-            scroll.autoreverses=YES; scroll.repeatCount=HUGE_VALF;
-            scroll.timingFunction=[CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut];
-            [_caption.layer addAnimation:scroll forKey:@"CP26HomeTitleScroll"];
+        if (geometryChanged || !_ticker || ![_captionTrack.layer animationForKey:@"CP26HomeTitleScroll"]) {
+            [_captionTrack.layer removeAnimationForKey:@"CP26HomeTitleScroll"];
+            CABasicAnimation *scroll=[CABasicAnimation animationWithKeyPath:@"transform.translation.x"];
+            scroll.fromValue=@0;
+            scroll.toValue=@(-cycle);
+            scroll.beginTime=CACurrentMediaTime()+.8;
+            scroll.duration=cycle/18.0;
+            scroll.repeatCount=HUGE_VALF;
+            scroll.timingFunction=[CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionLinear];
+            [_captionTrack.layer addAnimation:scroll forKey:@"CP26HomeTitleScroll"];
             _ticker=scroll;
         }
     } else {
-        [_caption.layer removeAnimationForKey:@"CP26HomeTitleScroll"];
+        [_captionTrack.layer removeAnimationForKey:@"CP26HomeTitleScroll"];
         _ticker=nil; _captionWidth=0; _captionViewportWidth=0;
+        _captionTrack.frame=CGRectMake(0,0,viewportWidth,h);
         _caption.frame=CGRectMake(0,0,viewportWidth,h);
     }
     [CATransaction commit];

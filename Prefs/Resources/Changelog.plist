@@ -18,54 +18,62 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-<string>v0.2.77 — Scrolling Home song title</string>
-<key>footerText</key>
-<string>Scrolls long Now Playing song titles across the Home mini-player and keeps short titles stationary</string>
-</dict>
+			<string>v0.2.78 — Smooth continuous Home title scroll</string>
+			<key>footerText</key>
+			<string>Scrolls long Home mini-player titles at a steady pace in a seamless loop, with a small gap before the title repeats</string>
+		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-<string>v0.2.75 — Home mini-player refresh</string>
-<key>footerText</key>
-<string>Refreshes Spotify track and artwork on return to Home</string>
-</dict>
+			<string>v0.2.77 — Scrolling Home song title</string>
+			<key>footerText</key>
+			<string>Scrolls long Now Playing song titles across the Home mini-player and keeps short titles stationary</string>
+		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-<string>v0.2.74 — Now Playing Back transition</string>
-<key>footerText</key>
-<string>Keeps the styled player visible during Back navigation</string>
-</dict>
+			<string>v0.2.75 — Home mini-player refresh</string>
+			<key>footerText</key>
+			<string>Refreshes Spotify track and artwork on return to Home</string>
+		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-<string>v0.2.73 — Native dock positions</string>
-<key>footerText</key>
-<string>Uses the native CarPlay positions for Home, time, battery and connectivity while keeping the larger glass dock and centred apps</string>
-</dict>
+			<string>v0.2.74 — Now Playing Back transition</string>
+			<key>footerText</key>
+			<string>Keeps the styled player visible during Back navigation</string>
+		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-<string>v0.2.72 — Ranger dock and Spotify Home</string>
-<key>footerText</key>
-<string>Ranger dock with Home and time on the right, larger glass and app icons, consistent translucent Spotify Home category rows, and caption updates while Home is visible</string>
-</dict>
+			<string>v0.2.73 — Native dock positions</string>
+			<key>footerText</key>
+			<string>Uses the native CarPlay positions for Home, time, battery and connectivity while keeping the larger glass dock and centred apps</string>
+		</dict>
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
-<string>v0.2.71 — Ranger dock, Spotify Home and CarLy</string>
-<key>footerText</key>
-<string>Places Home and the clock on the left and groups live signal, network and battery on the right. Styles the Spotify Home items CarPlay offers in limited mode. Draws an explicit Back chevron and hands the player to CarLy when lyrics open</string>
-</dict>
-<dict>
-<key>cell</key>
-<string>PSGroupCell</string>
-<key>label</key>
+			<string>v0.2.72 — Ranger dock and Spotify Home</string>
+			<key>footerText</key>
+			<string>Ranger dock with Home and time on the right, larger glass and app icons, consistent translucent Spotify Home category rows, and caption updates while Home is visible</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>v0.2.71 — Ranger dock, Spotify Home and CarLy</string>
+			<key>footerText</key>
+			<string>Places Home and the clock on the left and groups live signal, network and battery on the right. Styles the Spotify Home items CarPlay offers in limited mode. Draws an explicit Back chevron and hands the player to CarLy when lyrics open</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
 			<string>v0.2.70 — Spotify touch targets and shared dock</string>
 			<key>footerText</key>
 			<string>Centres artwork and playback buttons over the blurred album background, aligns touch targets with their visible controls, styles pushed Spotify lists, and applies the compact bottom dock across CarPlay with Settings removed from the dock</string>

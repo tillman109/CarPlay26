@@ -1,6 +1,14 @@
+# CarPlay26 v0.2.78 — Smooth continuous Home title scroll
+
+- Scrolls long Home mini-player titles at a steady pace in a seamless loop, with a small gap before the title repeats
+
 # CarPlay26 v0.2.77 — Scrolling Home song title
 
-- Scrolls long Now Playing song titles across the Home mini-player and keeps short titles stationary
+- Adds scrolling for long Now Playing song titles across the Home mini-player and keeps short titles stationary
+
+# CarPlay26 v0.2.76 — Home title scroll attempt
+
+- Added the Home mini-player title ticker
 
 # CarPlay26 v0.2.75 — Home mini-player refresh
 
