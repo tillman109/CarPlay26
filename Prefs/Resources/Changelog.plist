@@ -18,6 +18,14 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
+<string>v0.2.76 — Scrolling Home song title</string>
+<key>footerText</key>
+<string>Scrolls long Now Playing song titles across the Home mini-player and keeps short titles stationary</string>
+</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
 <string>v0.2.75 — Home mini-player refresh</string>
 <key>footerText</key>
 <string>Refreshes Spotify track and artwork on return to Home</string>

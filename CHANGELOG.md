@@ -1,3 +1,7 @@
+# CarPlay26 v0.2.76 — Scrolling Home song title
+
+- Scrolls long Now Playing song titles across the Home mini-player and keeps short titles stationary
+
 # CarPlay26 v0.2.75 — Home mini-player refresh
 
 - Refreshes Spotify track and artwork on return to the browse screen

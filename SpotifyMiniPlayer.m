@@ -128,6 +128,9 @@ static NSString *HostTrack(id<CP26MediaModel> snapshot) {
 @property(nonatomic,strong) UIButton *openButton, *transport, *next;
 @property(nonatomic,strong) UIImageView *art;
 @property(nonatomic,strong) UILabel *caption;
+@property(nonatomic,strong) CAGradientLayer *tickerMask;
+@property(nonatomic,strong) CABasicAnimation *ticker;
+@property(nonatomic) CGFloat captionWidth;
 @property(nonatomic,strong) NSTimer *timer;
 @property(nonatomic,copy) NSString *trackKey, *remoteTitle, *remoteArtist, *queriedHostTrack;
 @property(nonatomic,strong) UIImage *remoteArt, *catalogArt;
@@ -163,10 +166,16 @@ static NSString *HostTrack(id<CP26MediaModel> snapshot) {
         _art.contentMode=UIViewContentModeScaleAspectFill; _art.userInteractionEnabled=NO;
         _caption=[UILabel new]; _caption.textColor=UIColor.whiteColor;
         _caption.lineBreakMode=NSLineBreakByClipping;
+        _caption.clipsToBounds=YES;
         _fade=[CAGradientLayer layer]; _fade.startPoint=CGPointMake(0,.5); _fade.endPoint=CGPointMake(1,.5);
         _fade.colors=@[(id)UIColor.blackColor.CGColor,(id)UIColor.blackColor.CGColor,(id)UIColor.clearColor.CGColor];
         _fade.locations=@[@0,@.83,@1];
-        _caption.layer.mask=_fade;
+        _tickerMask=[CAGradientLayer layer];
+        _tickerMask.startPoint=CGPointMake(0,.5); _tickerMask.endPoint=CGPointMake(1,.5);
+        _tickerMask.colors=@[(id)UIColor.clearColor.CGColor,(id)UIColor.blackColor.CGColor,
+            (id)UIColor.blackColor.CGColor,(id)UIColor.clearColor.CGColor];
+        _tickerMask.locations=@[@0,@.07,@.93,@1];
+        _caption.layer.mask=_tickerMask;
         [_openButton addSubview:_art]; [_openButton addSubview:_caption];
         self.accessibilityElements=@[_openButton,_transport,_next];
         __weak CP26MiniPlayer *weakSelf=self;
@@ -350,8 +359,28 @@ static NSString *HostTrack(id<CP26MediaModel> snapshot) {
     CGFloat x=left+artwork+6*u;
     _caption.frame=CGRectMake(x,0,MAX(1,_openButton.bounds.size.width-x-1.5*u),h);
     [CATransaction begin]; [CATransaction setDisableActions:YES]; _fade.frame=_caption.bounds;
-    BOOL overflow=[_caption sizeThatFits:CGSizeMake(CGFLOAT_MAX,h)].width>_caption.bounds.size.width;
-    _caption.layer.mask=overflow ? _fade : nil; [CATransaction commit];
+    CGFloat textWidth=[_caption sizeThatFits:CGSizeMake(CGFLOAT_MAX,h)].width;
+    _tickerMask.frame=_caption.bounds;
+    _caption.layer.mask=_tickerMask;
+    if (textWidth>_caption.bounds.size.width+1) {
+        if (fabs(_captionWidth-textWidth)>1 || !_ticker) {
+            [_caption.layer removeAnimationForKey:@"CP26HomeTitleScroll"];
+            _captionWidth=textWidth;
+            _ticker=[CABasicAnimation animationWithKeyPath:@"transform.translation.x"];
+            _ticker.fromValue=@0;
+            _ticker.toValue=@(-MAX(1,textWidth-_caption.bounds.size.width));
+            _ticker.beginTime=CACurrentMediaTime()+1.1;
+            _ticker.duration=MAX(4,(((NSNumber *)_ticker.toValue).doubleValue*-1)/12.0);
+            _ticker.autoreverses=YES;
+            _ticker.repeatCount=HUGE_VALF;
+            _ticker.timingFunction=[CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut];
+            [_caption.layer addAnimation:_ticker forKey:@"CP26HomeTitleScroll"];
+        }
+    } else {
+        [_caption.layer removeAnimationForKey:@"CP26HomeTitleScroll"];
+        _ticker=nil; _captionWidth=0; _caption.transform=CGAffineTransformIdentity;
+    }
+    [CATransaction commit];
 }
 @end
 
