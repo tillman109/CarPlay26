@@ -159,7 +159,7 @@ static UIImage *ButtonImage(UIButton *b) {
 @property(nonatomic,strong) NSMutableArray<CP26PlayerSlot *> *main, *modes;
 @property(nonatomic,strong) CP26PlayerSlot *seek, *albumTap;
 @property(nonatomic,strong) NSTimer *timer;
-@property(nonatomic) BOOL applying, lyricsVisible;
+@property(nonatomic) BOOL departing, applying, lyricsVisible;
 @property(nonatomic,weak) UIViewController *nativeOwner;
 @property(nonatomic,weak) UIControl *microphone;
 @end
@@ -376,7 +376,7 @@ static NSString *ClockText(double seconds, BOOL negative) {
 }
 - (void)refresh {
     UIView *v=_host;
-    if (!v || _applying || !self.window) return;
+    if (!v || _departing || _applying || !self.window) return;
     _applying=YES;
     if ([self updateLyricsPresentation]) { _applying=NO; return; }
     CGFloat w=self.bounds.size.width,h=self.bounds.size.height, ux=w/400,uy=h/381.5;
@@ -446,11 +446,23 @@ static NSString *ClockText(double seconds, BOOL negative) {
 }
 @end
 
+void CP26PlayerDeparting(UIViewController *vc, BOOL departing) {
+    CP26PlayerSurface *s=objc_getAssociatedObject(vc,&playerKey);
+    if (!s || s.departing==departing) return;
+    s.departing=departing;
+    s.userInteractionEnabled=!departing;
+    UIView *outgoing=vc.viewIfLoaded;
+    if (departing && !s.hidden && outgoing.window && ![s isDescendantOfView:outgoing]) {
+        CGRect frame=[s convertRect:s.bounds toView:outgoing];
+        [outgoing addSubview:s];
+        s.frame=frame;
+    }
+}
 void CP26PlayerLayout(UIViewController *vc, BOOL enabled) {
     if (!vc || !NSThread.isMainThread) return;
     UIWindow *win=vc.viewIfLoaded.window;
     CP26PlayerSurface *s=objc_getAssociatedObject(vc,&playerKey);
-    if (s.applying) return;
+    if (s.applying || (enabled && s.departing)) return;
     CGFloat w=win.bounds.size.width,h=win.bounds.size.height;
     if (!enabled || !PlayerFront(vc) || !win || win.hidden || w<320 || w>560 || h<w ||
         ![win.windowScene.session.role isEqualToString:@"UIWindowSceneSessionRoleCarPlay"]) { Unmount(vc); return; }
@@ -474,8 +486,9 @@ void CP26PlayerLayout(UIViewController *vc, BOOL enabled) {
         s.timer=[NSTimer scheduledTimerWithTimeInterval:.32 repeats:YES block:^(NSTimer *timer) {
             UIViewController *owner=weak;
             if (!owner) { [timer invalidate]; return; }
-            if (!PlayerFront(owner)) { Unmount(owner); return; }
             CP26PlayerSurface *face=objc_getAssociatedObject(owner,&playerKey);
+            if (face.departing) return;
+            if (!PlayerFront(owner)) { Unmount(owner); return; }
             [face refresh];
         }];
         s.timer.tolerance=.06;

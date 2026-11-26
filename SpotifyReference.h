@@ -29,6 +29,7 @@ UIView *CP26HeaderHit(UINavigationBar *bar, CGPoint point, UIEvent *event, UIVie
 void CP26HeaderReport(NSMutableString *report);
 void CP26RemoveMiniPlayer(UIView *bar);
 void CP26InvalidatePlayback(void);
+void CP26PlayerDeparting(UIViewController *controller, BOOL departing);
 void CP26PlayerLayout(UIViewController *controller, BOOL enabled);
 void CP26RestorePlayers(void);
 void CP26PlayerViewLaidOut(UIView *host);
