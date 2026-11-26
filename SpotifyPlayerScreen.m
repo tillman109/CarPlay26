@@ -483,7 +483,7 @@ void CP26PlayerLayout(UIViewController *vc, BOOL enabled) {
     UIView *root=s.nativeOwner.viewIfLoaded, *branch=host;
     while (branch && branch.superview!=root) branch=branch.superview;
     CGRect box=[root convertRect:root.bounds toView:win];
-    CGRect body=CGRectMake(0,0,w,h-34.5*w/400);
+    CGRect body=CGRectMake(0,0,w,h-43*w/400);
     if (branch && root.window==win && CGRectGetMinX(box)<=1 && CGRectGetMaxX(box)>=w-1 &&
         (!root.clipsToBounds || CGRectContainsRect(CGRectInset(box,-1,-1),body))) parent=root;
     if (s.superview!=parent) {
@@ -491,7 +491,7 @@ void CP26PlayerLayout(UIViewController *vc, BOOL enabled) {
         else if (parent==bar.superview) [parent insertSubview:s belowSubview:bar];
         else [parent addSubview:s];
     }
-    SetFrame(s,[parent convertRect:CGRectMake(0,0,w,h-34.5*w/400) fromView:win]);
+    SetFrame(s,[parent convertRect:CGRectMake(0,0,w,h-43*w/400) fromView:win]);
     [s refresh];
 }
 void CP26PlayerViewLaidOut(UIView *host) {

@@ -71,7 +71,7 @@ static BOOL IsTime(NSString *text) {
     return numbers[0].length<=2 && numbers[0].integerValue<24 &&
         numbers[1].length==2 && numbers[1].integerValue<60;
 }
-typedef NS_ENUM(NSInteger,DockItemRole) { CP26DockContainer, CP26DockClock, CP26DockSignal, CP26DockNetwork, CP26DockWiFi, CP26DockExtra, CP26DockBattery };
+typedef NS_ENUM(NSInteger,DockItemRole) { CP26DockContainer, CP26DockClock, CP26DockBattery, CP26DockSignal, CP26DockNetwork, CP26DockWiFi, CP26DockExtra };
 static DockItemRole StatusRole(UIView *v) {
     NSString *name=NSStringFromClass(v.class);
     if ([name containsString:@"Battery"]) return CP26DockBattery;
@@ -111,17 +111,17 @@ static void ArrangeStatus(CP26DockState *s, UIView *foreground, UIView *root, CG
     CGFloat sum=0;
     for (UIView *v in items) {
         if (StatusRole(v)==CP26DockClock) {
-            CGFloat width=NaturalWidth(s,v,root)*.83*u;
-            Move(s,v,root,CGPointMake(42*u+width*.5,cy),.83*u);
+            CGFloat width=NaturalWidth(s,v,root)*u;
+            Move(s,v,root,CGPointMake(CGRectGetMaxX(root.bounds)-55*u-width*.5,cy),u);
         } else { [cluster addObject:v]; sum+=NaturalWidth(s,v,root); }
     }
-    CGFloat edge=CGRectGetMaxX(root.bounds)-8*u, gap=2.4*u;
-    CGFloat appsRight=s.stack ? CGRectGetMaxX([s.stack convertRect:s.stack.bounds toView:root]) : CGRectGetMidX(root.bounds);
-    CGFloat scale=sum>0 ? MIN(.78*u,MAX(0,edge-appsRight-9*u-gap*MAX(0,(NSInteger)cluster.count-1))/sum) : .78*u;
-    for (UIView *v in cluster.reverseObjectEnumerator) {
+    CGFloat edge=CGRectGetMinX(root.bounds)+10*u, gap=3*u;
+    CGFloat appsLeft=s.stack ? CGRectGetMinX([s.stack convertRect:s.stack.bounds toView:root]) : CGRectGetMidX(root.bounds);
+    CGFloat scale=sum>0 ? MIN(u,MAX(0,appsLeft-edge-12*u-gap*MAX(0,(NSInteger)cluster.count-1))/sum) : u;
+    for (UIView *v in cluster) {
         CGFloat width=NaturalWidth(s,v,root)*scale;
-        Move(s,v,root,CGPointMake(edge-width*.5,cy),scale);
-        edge-=width+gap;
+        Move(s,v,root,CGPointMake(edge+width*.5,cy),scale);
+        edge+=width+gap;
     }
     s.status=items;
 }
@@ -129,7 +129,7 @@ static void StatusItems(CP26DockState *s, UIView *v, UIView *root, CGFloat cy, C
     if (depth>8 || v.hidden || v.alpha<=.01) return;
     NSString *name=NSStringFromClass(v.class);
     if ([name isEqualToString:@"DBStatusBarHomeButton"]) {
-        s.home=(UIControl *)v; Move(s,v,root,CGPointMake(19.5*u,cy),.78*u); return;
+        s.home=(UIControl *)v; Move(s,v,root,CGPointMake(CGRectGetMaxX(root.bounds)-26*u,cy),u); return;
     }
     if ([name isEqualToString:@"_UIStatusBarForegroundView"]) {
         ArrangeStatus(s,v,root,cy,u);
@@ -169,7 +169,7 @@ void CP26ReferenceDock(UIWindow *window, UIView *root, CGRect surface, BOOL enab
     }
     UIView *group=s.stack.superview;
     if (group.superview==root && group.bounds.size.width>0)
-        Move(s,group,root,CGPointMake(CGRectGetMidX(root.bounds),cy),.765*u);
+        Move(s,group,root,CGPointMake(CGRectGetMidX(root.bounds),cy),u);
     StatusItems(s,root,root,cy,u,0);
     for (UIView *v in s.applied.keyEnumerator.allObjects) if (![s.touched containsObject:v]) RestoreMove(s,v);
 }

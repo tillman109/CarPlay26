@@ -634,8 +634,7 @@ static BOOL DockNativeBackground(UIView *v, UIWindow *w) {
 // Preserve masks owned by UIKit or another tweak.
 static CGRect CompactDockRect(CGRect bounds) {
     CGFloat u=MIN(bounds.size.width/400,bounds.size.height/45);
-    CGFloat h=MIN(bounds.size.height-2,34.4*u);
-    return CGRectMake(2.5*u,CGRectGetMaxY(bounds)-h-.5*u,bounds.size.width-4*u,h);
+    return CGRectInset(bounds,4*u,2*u);
 }
 static void ClipLocalDockWindow(UIWindow *w, NSHashTable<UIView *> *keep) {
     if (!dockGlassEnabled || !dockMasks || !DockRoot(w)) return;

@@ -1,3 +1,7 @@
+# CarPlay26 v0.2.72 — Ranger dock and Spotify Home
+
+- Ranger dock with Home and time on the right, larger glass and app icons, consistent translucent Spotify Home category rows, and caption updates while Home is visible
+
 # CarPlay26 v0.2.71 — Ranger dock, Spotify Home and CarLy
 
 - Places Home and the clock on the left of bottom docks in both drive configurations and measures live status items from the right edge

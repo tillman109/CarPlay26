@@ -19,6 +19,7 @@ static NSHashTable<UITableView *> *tables;
 @property(nonatomic,copy) NSString *nativeLabel;
 @property(nonatomic,weak) UITableViewCell *cell;
 @property(nonatomic) CGFloat unit;
+@property(nonatomic) BOOL homeCategory;
 @end
 
 @implementation CP26ListFace
@@ -71,8 +72,9 @@ static NSHashTable<UITableView *> *tables;
     _progressTrack.layer.cornerRadius=.7*u;
     _progressFill.frame=CGRectMake(0,0,progressWidth*_progress,1.4*u);
     _separator.frame=CGRectMake(textX,h-.6*u,MAX(0,w-textX),.6*u);
-    self.backgroundColor=(_cell.highlighted || _cell.selected || _cell.focused) ?
-        [UIColor colorWithWhite:1 alpha:.15] : UIColor.clearColor;
+    BOOL active=_cell.highlighted || _cell.selected || _cell.focused;
+    self.backgroundColor=_homeCategory ? [UIColor colorWithWhite:1 alpha:active ? .28 : .16] :
+        (active ? [UIColor colorWithWhite:1 alpha:.15] : UIColor.clearColor);
 }
 @end
 
@@ -153,12 +155,14 @@ static void PaintFace(UITableViewCell *cell, CPListItem *item, NSUInteger tab, C
         if (v!=face && v!=cell.selectedBackgroundView) SuppressNativePart(face,v,action);
     face.accessoryInset=action ? MAX(0,cell.bounds.size.width-CGRectGetMinX([action convertRect:action.bounds toView:cell])) : 0;
     if (cell.subviews.lastObject!=face) [cell bringSubviewToFront:face];
-    face.unit=u; face.frame=cell.bounds; face.cover.image=item.image ?: cell.imageView.image;
+    face.unit=u; face.homeCategory=(tab==0);
+    face.layer.cornerRadius=face.homeCategory ? 9*u : 0;
+    face.frame=face.homeCategory ? CGRectInset(cell.bounds,2*u,2*u) : cell.bounds; face.cover.image=item.image ?: cell.imageView.image;
     face.title.text=item.text; face.detail.text=item.detailText; face.detail.hidden=!item.detailText.length;
     UIImage *accessory=item.accessoryImage;
     if (!accessory) {
         if (item.accessoryType==CPListItemAccessoryTypeCloud) accessory=[UIImage systemImageNamed:@"icloud"];
-        else if (item.accessoryType==CPListItemAccessoryTypeDisclosureIndicator || tab==2 || tab==3)
+        else if (item.accessoryType==CPListItemAccessoryTypeDisclosureIndicator || tab==0 || tab==2 || tab==3)
             accessory=[UIImage systemImageNamed:@"chevron.right"];
     }
     face.accessory.image=accessory; face.accessory.hidden=action || !accessory;
@@ -280,7 +284,7 @@ void CP26UpdateBrowseTable(UITableView *table, NSUInteger tab, BOOL compactHeade
     }
     CGRect visible=[table convertRect:table.bounds toView:window];
     CGFloat nativeBottom=CGRectGetHeight(window.bounds)-CGRectGetMaxY(visible);
-    CGFloat desiredBottom=CGRectGetHeight(window.bounds)-34.5*u;
+    CGFloat desiredBottom=CGRectGetHeight(window.bounds)-43*u;
     if (nativeBottom>=33*u && nativeBottom<=53*u &&
         CGRectGetMaxY([table.superview convertRect:table.superview.bounds toView:window])>=desiredBottom) {
         visible.size.height=desiredBottom-CGRectGetMinY(visible);
@@ -318,9 +322,15 @@ void CP26UpdateBrowseTable(UITableView *table, NSUInteger tab, BOOL compactHeade
             CGRect frame=cell.frame; frame.origin.x=0; frame.size.width=wrapper.bounds.size.width;
             [s.geometry place:cell in:wrapper rect:frame];
         }
-        if (tab==0) { RestoreNativeRow(cell); continue; }
+
         NSIndexPath *path=[table indexPathForCell:cell];
         id item=path ? CP26BrowseModel(table,path) : nil;
+        if (tab==0) {
+            if ([item isKindOfClass:CPListItem.class] && [item text].length && ![item image] && ![item detailText].length)
+                PaintFace(cell,item,0,u,YES);
+            else { RestoreFace(cell); RestoreNativeRow(cell); }
+            continue;
+        }
         if ([item isKindOfClass:CPListItem.class]) {
             RestoreAssistant(s,cell);
             BOOL last=path.section+1==table.numberOfSections && path.row+1==[table numberOfRowsInSection:path.section];

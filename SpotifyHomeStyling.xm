@@ -710,6 +710,15 @@ static void CP26SpotifyHostAskShell(void) {
 %end
 %end
 
+%group CP26SpotifyListMetadata
+%hook CPListTemplate
+- (void)updateSections:(NSArray *)sections {
+    %orig;
+    CP26HomeMetadataChanged();
+}
+%end
+%end
+
 %group CP26SpotifyRowConfiguration
 %hook CPSImageRowCell
 - (void)configureWithImageRowItem:(id)item selectGridItemBlock:(id)onImage
@@ -900,6 +909,9 @@ static void CP26SpotifyHostAskShell(void) {
             if (artworkCell && listController && NSClassFromString(@"CPSTableView")) {
                 %init(CP26SpotifyArtworkRowStyle);
                 %init(CP26SpotifyHomeTable);
+                if (class_getInstanceMethod(NSClassFromString(@"CPListTemplate"),@selector(updateSections:))) {
+                    %init(CP26SpotifyListMetadata);
+                }
                 %init(CP26SpotifyListCellLifecycle);
                 %init(CP26SpotifyHomeList);
                 if (class_getInstanceMethod(listController,@selector(tableView:didSelectRowAtIndexPath:))) {

@@ -7,6 +7,7 @@ void CP26HomeSetEnabled(BOOL enabled);
 void CP26HomeTableLayout(UITableView *table);
 void CP26HomeListAppeared(UIViewController *controller);
 void CP26HomeListDisappeared(UIViewController *controller);
+void CP26HomeMetadataChanged(void);
 void CP26HomeTableReloaded(UITableView *table);
 CGFloat CP26HomeHeight(UITableView *table, NSIndexPath *path, CGFloat original);
 void CP26HomeLayoutRow(UITableViewCell *cell);

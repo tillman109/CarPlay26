@@ -241,7 +241,6 @@ static CPListItem *MatchArtwork(UIImage *image, NSArray<CPListItem *> *options) 
 @property(nonatomic,copy) NSArray<CPListItem *> *catalogue;
 @property(nonatomic,copy) NSDictionary *recentCaptions;
 @property(nonatomic,strong) NSMutableOrderedSet<CPListItem *> *visitedItems;
-@property(nonatomic,strong) NSMapTable<UITableViewCell *,id> *selectionBackgrounds;
 @property(nonatomic) NSUInteger revision;
 @property(nonatomic) BOOL reloadQueued;
 // This request exists only after a person opens a Home heading or picks an
@@ -334,17 +333,48 @@ static void SaveRecentCaptions(CP26HomeSession *session, CPListTemplate *recent)
         }
     }
     NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
-    [defaults setObject:captions forKey:recentsCacheKey];
-    session.recentCaptions = captions;
+    NSMutableDictionary *merged=[[defaults dictionaryForKey:recentsCacheKey] mutableCopy] ?: [NSMutableDictionary dictionary];
+    [merged removeObjectsForKeys:conflicts.allObjects];
+    if (merged.count+captions.count>384) [merged removeAllObjects];
+    [merged addEntriesFromDictionary:captions];
+    if (![session.recentCaptions isEqual:merged]) [defaults setObject:merged forKey:recentsCacheKey];
+    session.recentCaptions=merged;
+}
+
+// Reuse only titles explicitly paired with the same cover by a loaded Spotify template.
+static void IndexTemplateCaptions(CPListTemplate *list, NSMutableDictionary *names, NSMutableSet *ambiguous) {
+    for (CPListSection *section in list.sections) for (id model in section.items) {
+        if (![model isKindOfClass:CPListImageRowItem.class]) continue;
+        CPListImageRowItem *row=model;
+        NSArray *titles=[row respondsToSelector:@selector(imageTitles)] ? Host(row).imageTitles : nil;
+        NSArray *slots=[row.userInfo isKindOfClass:NSDictionary.class] ? [(NSDictionary *)row.userInfo objectForKey:@"items"] : nil;
+        NSArray *images=row.gridImages;
+        if (![titles isKindOfClass:NSArray.class] || titles.count!=images.count) titles=nil;
+        if (![slots isKindOfClass:NSArray.class] || slots.count!=images.count) slots=nil;
+        if (!titles && !slots) continue;
+        for (NSUInteger i=0;i<images.count && names.count<384;i++) {
+            NSDictionary *slot=[slots[i] isKindOfClass:NSDictionary.class] ? slots[i] : nil;
+            NSString *title=DisplayText(titles[i]) ?: DisplayText(slot[@"title"]) ?: DisplayText(slot[@"name"]);
+            if (!title) continue;
+            NSString *key=[ArtworkPrint(images[i]) base64EncodedStringWithOptions:0];
+            if (!key || [ambiguous containsObject:key]) continue;
+            if (names[key] && ![names[key] isEqual:title]) { [names removeObjectForKey:key]; [ambiguous addObject:key]; }
+            else names[key]=title;
+        }
+    }
 }
 
 static void UpdateCatalogue(CP26HomeSession *s) {
+    NSMutableDictionary *names=[NSMutableDictionary dictionary];
+    NSMutableSet *ambiguous=[NSMutableSet set];
+    NSMutableSet *indexed=[NSMutableSet set];
     NSMutableArray<CPListItem *> *catalogue = [NSMutableArray array];
     id<CP26ListHost> host = Host(s.tabs);
     CPTabBarTemplate *tabs = [host respondsToSelector:@selector(tabBarTemplate)] ? host.tabBarTemplate : nil;
     if ([tabs isKindOfClass:CPTabBarTemplate.class]) {
         for (CPListTemplate *list in tabs.templates) {
-            if (![list isKindOfClass:CPListTemplate.class] || !IsRecents(list,nil)) continue;
+            if (![list isKindOfClass:CPListTemplate.class]) continue;
+            IndexTemplateCaptions(list,names,ambiguous); [indexed addObject:list];
             for (CPListSection *section in list.sections)
                 for (id item in section.items)
                     if ([item isKindOfClass:CPListItem.class] && catalogue.count < 192)
@@ -355,7 +385,9 @@ static void UpdateCatalogue(CP26HomeSession *s) {
         UIViewController *vc = child;
         if ([vc isKindOfClass:UINavigationController.class])
             vc = ((UINavigationController *)vc).viewControllers.firstObject;
-        for (CPListSection *section in List(vc).sections) {
+        CPListTemplate *list=List(vc);
+        if (list && ![indexed containsObject:list]) IndexTemplateCaptions(list,names,ambiguous);
+        for (CPListSection *section in list.sections) {
             for (id item in section.items) {
                 if ([item isKindOfClass:CPListItem.class] && catalogue.count < 192)
                     [catalogue addObject:item];
@@ -364,6 +396,14 @@ static void UpdateCatalogue(CP26HomeSession *s) {
     }
     for (CP26HomeShelf *shelf in s.shelves.allValues) [catalogue addObjectsFromArray:shelf.items];
     [catalogue addObjectsFromArray:s.visitedItems.array];
+    NSUserDefaults *defaults=NSUserDefaults.standardUserDefaults;
+    NSDictionary *saved=[defaults dictionaryForKey:recentsCacheKey];
+    NSMutableDictionary *merged=[saved mutableCopy] ?: [NSMutableDictionary dictionary];
+    [merged removeObjectsForKeys:ambiguous.allObjects];
+    [merged addEntriesFromDictionary:names];
+    if (merged.count>384) merged=names;
+    if (![merged isEqual:saved] && (merged.count || saved.count)) [defaults setObject:merged forKey:recentsCacheKey];
+    s.recentCaptions=merged;
     s.catalogue = catalogue;
     s.revision++;
 }
@@ -390,7 +430,6 @@ static CP26HomeSession *Session(UITableView *table) {
     s = [CP26HomeSession new];
     s.table = table; s.home = home; s.tabs = tabs; s.window = table.window;
     s.shelves = [NSMutableDictionary dictionary];
-    s.selectionBackgrounds = [NSMapTable weakToStrongObjectsMapTable];
     s.visitedItems = [NSMutableOrderedSet orderedSet];
     s.recentCaptions = [NSUserDefaults.standardUserDefaults dictionaryForKey:recentsCacheKey];
     objc_setAssociatedObject(table,&sessionKey,s,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -547,7 +586,8 @@ static NSInteger NativeIndex(UIImage *image, NSArray<UIImage *> *images) {
 }
 
 static NSString *AccessibleTitle(UIImage *image, UIControl *button, NSString *heading) {
-    for (NSString *value in @[image.accessibilityLabel ?: @"", button.accessibilityLabel ?: @""]) {
+    UIButton *b=[button isKindOfClass:UIButton.class] ? (UIButton *)button : nil;
+    for (NSString *value in @[b.currentTitle ?: @"", b.configuration.title ?: @"", image.accessibilityLabel ?: @"", button.accessibilityLabel ?: @""]) {
         if (![value isKindOfClass:NSString.class] || !value.length || SameText(value,heading)) continue;
         NSString *s = [value stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
         if (DisplayText(s) && ![@[@"image", @"button", @"album artwork", @"artwork", @"cover art"]
@@ -959,6 +999,7 @@ static NSArray<CP26HomeEntry *> *Entries(CPListImageRowItem *row, UITableViewCel
 @property(nonatomic,strong) NSHashTable<UITableViewCell *> *cells;
 @property(nonatomic,strong) NSMutableDictionary<NSIndexPath *,NSNumber *> *heights;
 @property(nonatomic,copy) NSDictionary *captions;
+@property(nonatomic,strong) CP26HomeSession *metadata;
 @property(nonatomic) BOOL updating, queued, heightsChanged;
 @end
 @implementation CP26LimitedHomeState
@@ -1045,7 +1086,7 @@ static void UpdateLimitedCell(UITableView *table, UITableViewCell *cell, CP26Lim
     row.heading.hidden=!heading.length || (row.shortcut && !row.liveHeading);
     row.chevron.hidden=!row.liveHeading;
     [row.headingTarget bind:row.liveHeading ? head : nil];
-    CP26HomeSession *parked=objc_getAssociatedObject(table,&sessionKey);
+    CP26HomeSession *parked=s.metadata;
     NSArray *images=item.gridImages;
     NSArray *titles=[item respondsToSelector:@selector(imageTitles)] ? Host(item).imageTitles : nil;
     for (NSUInteger i=0;i<sources.count;i++) {
@@ -1085,6 +1126,9 @@ static void LimitedTable(UITableView *t) {
     if (s.updating) return;
     if (!s) {
         s=[CP26LimitedHomeState new]; s.cells=[NSHashTable weakObjectsHashTable]; s.heights=[NSMutableDictionary dictionary];
+        s.metadata=[CP26HomeSession new];
+        s.metadata.table=t; s.metadata.home=ListController(t); s.metadata.tabs=HomeTabs(s.metadata.home);
+        UpdateCatalogue(s.metadata);
         s.captions=[NSUserDefaults.standardUserDefaults dictionaryForKey:recentsCacheKey];
         objc_setAssociatedObject(t,&limitedStateKey,s,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         if (!limitedTables) limitedTables=[NSHashTable weakObjectsHashTable]; [limitedTables addObject:t];
@@ -1284,32 +1328,7 @@ static void ReadDetail(CP26HomeSession *s, UIViewController *vc, UITableView *ta
     [table.delegate tableView:table didSelectRowAtIndexPath:match];
 }
 
-static void RestoreSelection(CP26HomeSession *s, UITableViewCell *cell) {
-    id saved = [s.selectionBackgrounds objectForKey:cell];
-    if (!saved) return;
-    cell.backgroundConfiguration = saved == NSNull.null ? nil : saved;
-    [s.selectionBackgrounds removeObjectForKey:cell];
-}
-
-static void StyleSelection(CP26HomeSession *s, UITableViewCell *cell) {
-    CPListItem *item = CP26BrowseModel(s.table,[s.table indexPathForCell:cell]);
-    if (![item isKindOfClass:CPListItem.class] || item.image || item.detailText.length || !item.text.length) {
-        RestoreSelection(s,cell);
-        return;
-    }
-    if (![s.selectionBackgrounds objectForKey:cell])
-        [s.selectionBackgrounds setObject:((id)cell.backgroundConfiguration ?: NSNull.null) forKey:cell];
-    UIBackgroundConfiguration *background = [UIBackgroundConfiguration clearConfiguration];
-    BOOL light = cell.traitCollection.userInterfaceStyle == UIUserInterfaceStyleLight;
-    CGFloat alpha = cell.isFocused || cell.isHighlighted || cell.isSelected ? .75 : (light ? .72 : .16);
-    background.backgroundColor = [UIColor colorWithWhite:1 alpha:alpha];
-    background.cornerRadius = 9;
-    background.backgroundInsets = NSDirectionalEdgeInsetsMake(2,2,2,2);
-    if (![cell.backgroundConfiguration isEqual:background]) cell.backgroundConfiguration = background;
-}
-
 static void Detach(CP26HomeSession *s) {
-    for (UITableViewCell *cell in s.selectionBackgrounds.keyEnumerator.allObjects) RestoreSelection(s,cell);
     UITableView *table = s.table;
     CancelRequest(s);
     for (UITableViewCell *cell in table.visibleCells) CP26HomeRestoreRow(cell);
@@ -1350,11 +1369,9 @@ void CP26HomeTableLayout(UITableView *table) {
     CP26HomeSession *s = Session(table);
     if (!s) return;
     NSArray *visible = table.visibleCells;
-    for (UITableViewCell *cell in s.selectionBackgrounds.keyEnumerator.allObjects)
-        if (![visible containsObject:cell] || !HomeTabs(s.home)) RestoreSelection(s,cell);
     if (!HomeTabs(s.home)) return;
     for (UITableViewCell *cell in visible) {
-        if (!HostClass(cell,@"CPSImageRowCell")) { StyleSelection(s,cell); continue; }
+        if (!HostClass(cell,@"CPSImageRowCell")) continue;
         CP26HomeRow *row = objc_getAssociatedObject(cell,&rowKey);
         if (!row || row.needsContent || row.revision != s.revision) CP26HomeLayoutRow(cell);
     }
@@ -1401,8 +1418,30 @@ void CP26HomeListDisappeared(UIViewController *vc) {
         if (s.detailController == vc) CancelRequest(s);
 }
 
+void CP26HomeMetadataChanged(void) {
+    static BOOL queued;
+    if (!NSThread.isMainThread) { dispatch_async(dispatch_get_main_queue(), ^{ CP26HomeMetadataChanged(); }); return; }
+    if (!CP26HomeEnabled || queued) return;
+    queued=YES;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        queued=NO;
+        if (!CP26HomeEnabled) return;
+        for (CP26HomeSession *s in sessions.allObjects) {
+            if (!CarWindow(s.table.window) || !HomeTabs(s.home) || Limited(s.table)) continue;
+            UpdateCatalogue(s); [s.table setNeedsLayout];
+        }
+        for (UITableView *t in limitedTables.allObjects) {
+            CP26LimitedHomeState *state=objc_getAssociatedObject(t,&limitedStateKey);
+            if (!state || !Limited(t) || !CarWindow(t.window) || !HomeTabs(ListController(t))) continue;
+            UpdateCatalogue(state.metadata);
+            state.captions=[NSUserDefaults.standardUserDefaults dictionaryForKey:recentsCacheKey];
+            [t setNeedsLayout];
+        }
+    });
+}
 void CP26HomeTableReloaded(UITableView *table) {
     if (!CP26HomeEnabled || !NSThread.isMainThread) return;
+    CP26HomeMetadataChanged();
     CP26LimitedHomeState *restricted=objc_getAssociatedObject(table,&limitedStateKey);
     if (Limited(table)) {
         [restricted.heights removeAllObjects]; [table setNeedsLayout]; return;

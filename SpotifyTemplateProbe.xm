@@ -327,7 +327,7 @@ static void CP26SpotifyCaptureNow(NSString *reason) {
     if (![NSThread isMainThread]) return;
     UIApplication *app = UIApplication.sharedApplication;
     NSMutableString *report = [NSMutableString stringWithFormat:
-        @"CarPlay26 v0.2.71 | Spotify template host geometry\n"
+        @"CarPlay26 v0.2.72 | Spotify template host geometry\n"
          "Date=%@\nPID=%d\nProcess=%@\nTrigger=%@\n"
          "No app text, track titles, contact names, images or playlist data collected\n\n",
         NSDate.date, getpid(), NSProcessInfo.processInfo.processName, reason];
