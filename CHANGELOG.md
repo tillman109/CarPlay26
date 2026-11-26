@@ -1,3 +1,7 @@
+# CarPlay26 v0.2.73 — Native dock positions
+
+- Uses the native CarPlay positions for Home, time, battery and connectivity while keeping the larger glass dock and centred apps
+
 # CarPlay26 v0.2.72 — Ranger dock and Spotify Home
 
 - Ranger dock with Home and time on the right, larger glass and app icons, consistent translucent Spotify Home category rows, and caption updates while Home is visible

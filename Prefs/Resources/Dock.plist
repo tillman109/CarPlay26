@@ -26,7 +26,7 @@
 			<key>cellClass</key>
 			<string>CP26InfoSwitchCell</string>
 			<key>CP26Help</key>
-<string>Uses the larger glass dock across apps, the Dashboard and the app grid on displays with a bottom dock. Places battery and connectivity on the left, apps in the centre, then time and Home on the right. Hides the Settings shortcut in the dock. Restart CarPlay Services to apply</string>
+<string>Uses the larger glass dock across apps, the Dashboard and the app grid on displays with a bottom dock. CarPlay positions Home, the clock and status indicators. Hides the Settings shortcut in the dock. Restart CarPlay Services to apply</string>
 		</dict>
 		<dict>
 			<key>cell</key>

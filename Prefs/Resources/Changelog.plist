@@ -18,6 +18,14 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
+<string>v0.2.73 — Native dock positions</string>
+<key>footerText</key>
+<string>Uses the native CarPlay positions for Home, time, battery and connectivity while keeping the larger glass dock and centred apps</string>
+</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
 <string>v0.2.72 — Ranger dock and Spotify Home</string>
 <key>footerText</key>
 <string>Ranger dock with Home and time on the right, larger glass and app icons, consistent translucent Spotify Home category rows, and caption updates while Home is visible</string>
