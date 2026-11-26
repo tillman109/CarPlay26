@@ -1,3 +1,7 @@
+# CarPlay26 v0.2.81 — Native Queue and Jam glass
+
+- Styles the visible native Queue and Jam control in place so its glass capsule, white title and original tap action appear together
+
 # CarPlay26 v0.2.80 — Static Home titles
 
 - Keeps the duplicate marquee title and edge fade disabled when a song title fits the Home mini-player
