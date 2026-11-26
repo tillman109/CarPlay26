@@ -1,6 +1,6 @@
-# CarPlay26 v0.2.81 — Native Queue and Jam glass
+# CarPlay26 v0.2.82 — Queue and Jam native glass fix
 
-- Styles the visible native Queue and Jam control in place so its glass capsule, white title and original tap action appear together
+- Finds the visible Queue and Jam title across the Now Playing screen and styles its actual native control with a persistent glass capsule and white text
 
 # CarPlay26 v0.2.80 — Static Home titles
 

@@ -22,11 +22,14 @@ BOOL CP26ActivateBarItem(UIBarButtonItem *item, UIControl *control) {
 @property(nonatomic,strong) UILabel *menuTitle;
 @property(nonatomic,strong) UIView *backGlass, *actionGlass;
 @property(nonatomic,weak) UIControl *nativeBack, *nativeAction;
-@property(nonatomic,weak) UIView *nativeActionStyled;
-@property(nonatomic,strong) UIColor *nativeActionTint, *nativeActionTitleColor;
 @property(nonatomic,weak) UIBarButtonItem *left, *right;
 @property(nonatomic,strong) NSMapTable<UIView *,NSNumber *> *suppressed;
 @property(nonatomic,strong) UIColor *originalColor;
+@property(nonatomic,weak) UIView *nativeActionStyled;
+@property(nonatomic,strong) UIView *nativeActionGlass;
+@property(nonatomic,strong) UIColor *nativeActionTint, *nativeActionTitleColor, *nativeActionBackground;
+@property(nonatomic,strong) NSMapTable<UILabel *,UIColor *> *nativeActionLabelColors;
+@property(nonatomic) BOOL nativeActionOpaque;
 @property(nonatomic) BOOL originalOpaque, clearBar;
 @property(nonatomic) BOOL player, applying;
 @property(nonatomic,strong) CAShapeLayer *chevron;
@@ -116,28 +119,73 @@ static void RestoreUnused(CP26Header *s, NSSet *keep) {
         [s.suppressed removeObjectForKey:v];
     }
 }
+static UILabel *QueueLabelIn(UIView *view, NSUInteger depth) {
+    if (!view || depth>12 || view.hidden || view.alpha<=.01 || [NSStringFromClass(view.class) hasPrefix:@"CP26"]) return nil;
+    if ([view isKindOfClass:UILabel.class]) {
+        NSString *text=((UILabel *)view).text.lowercaseString;
+        if ([text containsString:@"queue"] && [text containsString:@"jam"]) return (UILabel *)view;
+    }
+    if ([view isKindOfClass:UIButton.class]) {
+        NSString *text=((UIButton *)view).currentTitle.lowercaseString;
+        if ([text containsString:@"queue"] && [text containsString:@"jam"]) return ((UIButton *)view).titleLabel;
+    }
+    for (UIView *child in view.subviews) {
+        UILabel *found=QueueLabelIn(child,depth+1);
+        if (found) return found;
+    }
+    return nil;
+}
+static UIView *QueueContainer(UILabel *label) {
+    UIView *fallback=label.superview;
+    for (UIView *v=label; v; v=v.superview) {
+        if ([v isKindOfClass:UIControl.class]) return v;
+        if (v.superview && [NSStringFromClass(v.superview.class) containsString:@"BarButton"]) fallback=v.superview;
+    }
+    return fallback;
+}
 static void RestoreNativeAction(CP26Header *s) {
     UIView *view=s.nativeActionStyled;
     if (view) {
-        CP26RemoveGlass(view);
+        [s.nativeActionGlass removeFromSuperview];
         if (s.nativeActionTint) view.tintColor=s.nativeActionTint;
+        view.backgroundColor=s.nativeActionBackground; view.opaque=s.nativeActionOpaque;
         if ([view isKindOfClass:UIButton.class] && s.nativeActionTitleColor)
             [(UIButton *)view setTitleColor:s.nativeActionTitleColor forState:UIControlStateNormal];
     }
-    s.nativeActionStyled=nil; s.nativeActionTint=nil; s.nativeActionTitleColor=nil;
+    for (UILabel *label in s.nativeActionLabelColors.keyEnumerator.allObjects) {
+        UIColor *color=[s.nativeActionLabelColors objectForKey:label];
+        if (color) label.textColor=color;
+    }
+    s.nativeActionStyled=nil; s.nativeActionGlass=nil;
+    s.nativeActionTint=nil; s.nativeActionTitleColor=nil; s.nativeActionBackground=nil;
+    s.nativeActionLabelColors=nil;
 }
-static void StyleNativeAction(CP26Header *s, UIView *view) {
+static void StyleNativeAction(CP26Header *s, UIView *view, UILabel *label, CGFloat unit) {
     if (s.nativeActionStyled!=view) {
         RestoreNativeAction(s);
-        s.nativeActionStyled=view;
-        s.nativeActionTint=view.tintColor;
+        s.nativeActionStyled=view; s.nativeActionTint=view.tintColor;
+        s.nativeActionBackground=view.backgroundColor; s.nativeActionOpaque=view.opaque;
         if ([view isKindOfClass:UIButton.class])
             s.nativeActionTitleColor=[(UIButton *)view titleColorForState:UIControlStateNormal];
+        s.nativeActionGlass=[UIView new]; s.nativeActionGlass.userInteractionEnabled=NO;
+        s.nativeActionGlass.clipsToBounds=YES; s.nativeActionGlass.layer.cornerCurve=kCACornerCurveContinuous;
+        s.nativeActionGlass.layer.borderColor=[UIColor colorWithWhite:1 alpha:.19].CGColor;
+        s.nativeActionGlass.layer.borderWidth=.55;
+        s.nativeActionGlass.backgroundColor=[UIColor colorWithWhite:1 alpha:.12];
+        [view insertSubview:s.nativeActionGlass atIndex:0];
     }
-    view.tintColor=UIColor.whiteColor;
-    if ([view isKindOfClass:UIButton.class])
-        [(UIButton *)view setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
-    CP26GlassPill(view,MIN(CGRectGetWidth(view.bounds),CGRectGetHeight(view.bounds))*.5);
+    view.tintColor=UIColor.whiteColor; view.backgroundColor=UIColor.clearColor; view.opaque=NO;
+    if ([view isKindOfClass:UIButton.class]) [(UIButton *)view setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
+    if (label) {
+        if (!s.nativeActionLabelColors) s.nativeActionLabelColors=[NSMapTable weakToStrongObjectsMapTable];
+        if (![s.nativeActionLabelColors objectForKey:label]) [s.nativeActionLabelColors setObject:label.textColor forKey:label];
+        label.textColor=UIColor.whiteColor;
+    }
+    CGRect inset=CGRectInset(view.bounds,2.5*unit,3*unit);
+    if (CGRectIsEmpty(inset)) inset=view.bounds;
+    s.nativeActionGlass.frame=inset;
+    s.nativeActionGlass.layer.cornerRadius=CGRectGetHeight(inset)*.5;
+    CP26GlassPill(s.nativeActionGlass,CGRectGetHeight(inset)*.5);
 }
 static void Detach(CP26Header *s) {
     if (!s) return;
@@ -214,32 +262,18 @@ void CP26LayoutHeader(UINavigationBar *bar) {
                 if ([a.lowercaseString containsString:@"nowplaying"]) wave=YES;
         }
     }
-    BOOL mini=NO, showQueue=NO, nativeQueue=NO;
+    BOOL mini=NO, nativeQueue=NO;
     if (!s.player && wave && item.rightBarButtonItems.count<=1) {
         mini=CP26UpdateMiniPlayer(bar,s.nativeAction,s.owner,s.right,CGRectMake(w-165*u,0,164*u,33*u));
     } else CP26RemoveMiniPlayer(bar);
     if (s.player && item.rightBarButtonItems.count<=1) {
+        UILabel *queueLabel=QueueLabelIn(s.owner.viewIfLoaded,0);
+        UIView *queueView=QueueContainer(queueLabel);
+        if (!queueView) queueView=right ?: (UIView *)s.nativeAction;
         NSString *title=s.right.title ?: VisibleTitle(right);
-        if (title.length && (right || s.nativeAction || s.right)) {
-            BOOL hasAction=s.nativeAction || (s.right.action && s.right.enabled);
-            if (hasAction) {
-                showQueue=YES;
-                UIFont *font=[UIFont systemFontOfSize:12*u weight:UIFontWeightSemibold];
-                if (![s.action.titleLabel.font isEqual:font]) s.action.titleLabel.font=font;
-                if (![s.action.currentTitle isEqualToString:title]) [s.action setTitle:title forState:UIControlStateNormal];
-                s.action.accessibilityLabel=title;
-                s.action.enabled=s.right ? s.right.enabled : s.nativeAction.enabled;
-                CGFloat width=MIN(w*.48,MAX(54*u,ceil([title sizeWithAttributes:@{NSFontAttributeName:s.action.titleLabel.font}].width)+20*u));
-                // Use the same horizontal and vertical glass inset as the Back control.
-                ButtonSize(s.action,s.actionGlass,CGRectMake(w-width-1*u,0,width,33*u),2.5*u,3*u);
-                RestoreNativeAction(s);
-            } else if (right) {
-                // Some Spotify releases expose Queue and Jam as an opaque native item
-                // without a discoverable UIControl action. Style that original item in
-                // place so its own touch target and responder-chain action stay intact.
-                nativeQueue=YES;
-                StyleNativeAction(s,right);
-            }
+        if ((queueLabel || title.length) && queueView) {
+            nativeQueue=YES;
+            StyleNativeAction(s,queueView,queueLabel,u);
         }
     }
     if (!nativeQueue) RestoreNativeAction(s);
@@ -253,8 +287,8 @@ void CP26LayoutHeader(UINavigationBar *bar) {
         s.menuTitle.frame=CGRectMake(MAX(start,MIN((w-width)*.5,end-width)),0,width,33*u);
         Suppress(s,original,keep);
     }
-    s.action.hidden=!showQueue;
-    if (showQueue || mini) Suppress(s,right,keep);
+    s.action.hidden=YES;
+    if (mini) Suppress(s,right,keep);
     if (!s.clearBar) {
         s.originalColor=bar.backgroundColor; s.originalOpaque=bar.opaque; s.clearBar=YES;
     }
