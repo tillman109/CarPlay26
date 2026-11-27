@@ -18,6 +18,14 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
+			<string>v0.2.84 - Now Playing queue button</string>
+			<key>footerText</key>
+			<string>Applies Back glass to the native Queue and Jam button</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
 			<string>v0.2.83 — Find Queue and Jam in navigation bar</string>
 			<key>footerText</key>
 			<string>Searches the native navigation bar first and styles the containing item, since Queue and Jam may live outside the template content view</string>

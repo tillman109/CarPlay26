@@ -1,6 +1,6 @@
 Package: com.tillman109.carplay26
 Name: CarPlay26
-Version: 0.2.83
+Version: 0.2.84
 Architecture: iphoneos-arm64e
 Description: CarPlay26 with a larger Ranger dock with native Home and status placement, Spotify styling for limited lists and CarLy player compatibility.
 Maintainer: CarPlay26 Project

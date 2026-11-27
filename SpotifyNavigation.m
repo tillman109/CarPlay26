@@ -27,9 +27,9 @@ BOOL CP26ActivateBarItem(UIBarButtonItem *item, UIControl *control) {
 @property(nonatomic,strong) UIColor *originalColor;
 @property(nonatomic,weak) UIView *nativeActionStyled;
 @property(nonatomic,strong) UIView *nativeActionGlass;
-@property(nonatomic,strong) UIColor *nativeActionTint, *nativeActionTitleColor, *nativeActionBackground;
-@property(nonatomic,strong) NSMapTable<UILabel *,UIColor *> *nativeActionLabelColors;
-@property(nonatomic) BOOL nativeActionOpaque;
+@property(nonatomic,strong) UILabel *queueCaption;
+@property(nonatomic,weak) UILabel *queueSource;
+@property(nonatomic) CGFloat queueOriginalAlpha;
 @property(nonatomic) BOOL originalOpaque, clearBar;
 @property(nonatomic) BOOL player, applying;
 @property(nonatomic,strong) CAShapeLayer *chevron;
@@ -71,15 +71,6 @@ static UIControl *ActionIn(UIView *v) {
     }
     return [v isKindOfClass:UIControl.class] ? (UIControl *)v : nil;
 }
-static NSString *VisibleTitle(UIView *v) {
-    if ([v isKindOfClass:UILabel.class]) return ((UILabel *)v).text;
-    if ([v isKindOfClass:UIButton.class] && ((UIButton *)v).currentTitle.length) return ((UIButton *)v).currentTitle;
-    for (UIView *child in v.subviews) {
-        NSString *label=VisibleTitle(child);
-        if (label.length) return label;
-    }
-    return nil;
-}
 static void FindBarParts(UIView *v, CP26Header *s, NSUInteger depth, UIView **left, UIView **right) {
     if (!v || depth>8 || v==s.back || v==s.action || v.hidden) return;
     NSString *name=NSStringFromClass(v.class);
@@ -119,71 +110,52 @@ static void RestoreUnused(CP26Header *s, NSSet *keep) {
         [s.suppressed removeObjectForKey:v];
     }
 }
-static UILabel *QueueLabelIn(UIView *view, NSUInteger depth) {
-    if (!view || depth>12 || view.hidden || view.alpha<=.01 || [NSStringFromClass(view.class) hasPrefix:@"CP26"]) return nil;
-    if ([view isKindOfClass:UILabel.class]) {
-        NSString *text=((UILabel *)view).text.lowercaseString;
-        if ([text containsString:@"queue"] && [text containsString:@"jam"]) return (UILabel *)view;
-    }
-    if ([view isKindOfClass:UIButton.class]) {
-        NSString *text=((UIButton *)view).currentTitle.lowercaseString;
-        if ([text containsString:@"queue"] && [text containsString:@"jam"]) return ((UIButton *)view).titleLabel;
+// The Now Playing bar contains a spinner and a separately wrapped CPUILabelButton.
+static UIButton *QueueButtonIn(UIView *view, UINavigationBar *bar) {
+    if (view.hidden || view.alpha<=.01) return nil;
+    if ([view isKindOfClass:NSClassFromString(@"CPUILabelButton")] &&
+        [view isKindOfClass:UIButton.class]) {
+        UIButton *button=(UIButton *)view;
+        CGRect box=[button convertRect:button.bounds toView:bar];
+        NSString *title=button.currentAttributedTitle.string ?: button.currentTitle ?: button.titleLabel.text;
+        if (CGRectGetMidX(box)>CGRectGetMidX(bar.bounds) &&
+            [title caseInsensitiveCompare:@"Queue and Jam"]==NSOrderedSame && title.length) return button;
     }
     for (UIView *child in view.subviews) {
-        UILabel *found=QueueLabelIn(child,depth+1);
-        if (found) return found;
+        UIButton *button=QueueButtonIn(child,bar);
+        if (button) return button;
     }
     return nil;
 }
-static UIView *QueueContainer(UILabel *label, UIView *bar) {
-    if (!label || !bar) return nil;
-    UIView *branch=label;
-    while (branch.superview && branch.superview!=bar) branch=branch.superview;
-    return branch.superview==bar ? branch : nil;
-}
 static void RestoreNativeAction(CP26Header *s) {
-    UIView *view=s.nativeActionStyled;
-    if (view) {
-        [s.nativeActionGlass removeFromSuperview];
-        if (s.nativeActionTint) view.tintColor=s.nativeActionTint;
-        view.backgroundColor=s.nativeActionBackground; view.opaque=s.nativeActionOpaque;
-        if ([view isKindOfClass:UIButton.class] && s.nativeActionTitleColor)
-            [(UIButton *)view setTitleColor:s.nativeActionTitleColor forState:UIControlStateNormal];
-    }
-    for (UILabel *label in s.nativeActionLabelColors.keyEnumerator.allObjects) {
-        UIColor *color=[s.nativeActionLabelColors objectForKey:label];
-        if (color) label.textColor=color;
-    }
-    s.nativeActionStyled=nil; s.nativeActionGlass=nil;
-    s.nativeActionTint=nil; s.nativeActionTitleColor=nil; s.nativeActionBackground=nil;
-    s.nativeActionLabelColors=nil;
+    if (s.queueSource) s.queueSource.alpha=s.queueOriginalAlpha;
+    [s.nativeActionGlass removeFromSuperview];
+    s.nativeActionGlass=nil; s.queueCaption=nil; s.queueSource=nil; s.nativeActionStyled=nil;
 }
-static void StyleNativeAction(CP26Header *s, UIView *view, UILabel *label, CGFloat unit) {
-    if (s.nativeActionStyled!=view) {
+static void StyleQueue(CP26Header *s, UIButton *button, CGFloat unit) {
+    if (!button) { RestoreNativeAction(s); return; }
+    if (s.nativeActionStyled!=button || s.queueSource!=button.titleLabel) {
         RestoreNativeAction(s);
-        s.nativeActionStyled=view; s.nativeActionTint=view.tintColor;
-        s.nativeActionBackground=view.backgroundColor; s.nativeActionOpaque=view.opaque;
-        if ([view isKindOfClass:UIButton.class])
-            s.nativeActionTitleColor=[(UIButton *)view titleColorForState:UIControlStateNormal];
-        s.nativeActionGlass=[UIView new]; s.nativeActionGlass.userInteractionEnabled=NO;
-        s.nativeActionGlass.clipsToBounds=YES; s.nativeActionGlass.layer.cornerCurve=kCACornerCurveContinuous;
-        s.nativeActionGlass.layer.borderColor=[UIColor colorWithWhite:1 alpha:.19].CGColor;
-        s.nativeActionGlass.layer.borderWidth=.55;
-        s.nativeActionGlass.backgroundColor=[UIColor colorWithWhite:1 alpha:.12];
-        [view insertSubview:s.nativeActionGlass atIndex:0];
+        s.nativeActionStyled=button;
+        s.queueSource=button.titleLabel;
+        s.queueOriginalAlpha=button.titleLabel.alpha;
+        UIView *glass=[UIView new];
+        glass.userInteractionEnabled=NO; glass.accessibilityElementsHidden=YES;
+        s.nativeActionGlass=glass;
+        [button addSubview:glass];
+        UILabel *caption=[UILabel new];
+        caption.textColor=UIColor.whiteColor; caption.textAlignment=NSTextAlignmentCenter;
+        caption.adjustsFontSizeToFitWidth=YES; caption.minimumScaleFactor=.8;
+        [glass addSubview:caption]; s.queueCaption=caption;
     }
-    view.tintColor=UIColor.whiteColor; view.backgroundColor=UIColor.clearColor; view.opaque=NO;
-    if ([view isKindOfClass:UIButton.class]) [(UIButton *)view setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
-    if (label) {
-        if (!s.nativeActionLabelColors) s.nativeActionLabelColors=[NSMapTable weakToStrongObjectsMapTable];
-        if (![s.nativeActionLabelColors objectForKey:label]) [s.nativeActionLabelColors setObject:label.textColor forKey:label];
-        label.textColor=UIColor.whiteColor;
-    }
-    CGRect inset=CGRectInset(view.bounds,2.5*unit,3*unit);
-    if (CGRectIsEmpty(inset)) inset=view.bounds;
-    s.nativeActionGlass.frame=inset;
-    s.nativeActionGlass.layer.cornerRadius=CGRectGetHeight(inset)*.5;
-    CP26GlassPill(s.nativeActionGlass,CGRectGetHeight(inset)*.5);
+    s.queueSource.alpha=0;
+    UIView *glass=s.nativeActionGlass;
+    CGFloat height=MIN(27*unit,CGRectGetHeight(button.bounds));
+    glass.frame=CGRectMake(0,(CGRectGetHeight(button.bounds)-height)/2,CGRectGetWidth(button.bounds),height);
+    CP26GlassPill(glass,height/2);
+    s.queueCaption.font=[UIFont systemFontOfSize:12*unit weight:UIFontWeightSemibold];
+    s.queueCaption.text=button.currentAttributedTitle.string ?: button.currentTitle ?: button.titleLabel.text;
+    s.queueCaption.frame=CGRectInset(glass.bounds,5*unit,0);
 }
 static void Detach(CP26Header *s) {
     if (!s) return;
@@ -260,25 +232,11 @@ void CP26LayoutHeader(UINavigationBar *bar) {
                 if ([a.lowercaseString containsString:@"nowplaying"]) wave=YES;
         }
     }
-    BOOL mini=NO, nativeQueue=NO;
+    BOOL mini=NO;
     if (!s.player && wave && item.rightBarButtonItems.count<=1) {
         mini=CP26UpdateMiniPlayer(bar,s.nativeAction,s.owner,s.right,CGRectMake(w-165*u,0,164*u,33*u));
     } else CP26RemoveMiniPlayer(bar);
-    if (s.player && item.rightBarButtonItems.count<=1) {
-        // Queue and Jam can be a native navigation-item view rather than a child
-        // of the template controller's content view. Search the bar first.
-        UILabel *queueLabel=QueueLabelIn(bar,0);
-        if (!queueLabel) queueLabel=QueueLabelIn(s.owner.viewIfLoaded,0);
-        if (!queueLabel) queueLabel=QueueLabelIn(s.owner.navigationController.viewIfLoaded,0);
-        UIView *queueView=QueueContainer(queueLabel,bar);
-        if (!queueView) queueView=right ?: (UIView *)s.nativeAction;
-        NSString *title=s.right.title ?: VisibleTitle(right);
-        if ((queueLabel || title.length) && queueView) {
-            nativeQueue=YES;
-            StyleNativeAction(s,queueView,queueLabel,u);
-        }
-    }
-    if (!nativeQueue) RestoreNativeAction(s);
+    StyleQueue(s,s.player ? QueueButtonIn(bar,bar) : nil,u);
     // Keep the real menu title visible alongside the expanded playback bar.
     UILabel *original=mini && !item.titleView ? TitleIn(bar,s,item.title) : nil;
     s.menuTitle.hidden=!original;
@@ -356,6 +314,7 @@ void CP26HeaderReport(NSMutableString *out) {
     for (UINavigationBar *bar in headerBars.allObjects) {
         CP26Header *s=objc_getAssociatedObject(bar,&headerKey);
         CP26ReportHit(out,@"navigation back",s.back);
-        CP26ReportHit(out,@"navigation right",s.action);
+        [out appendFormat:@"QUEUE v0.2.84 matched=%d glassAttached=%d\n",s.nativeActionStyled!=nil,s.nativeActionGlass.window!=nil];
+        CP26ReportHit(out,@"navigation right",s.nativeActionStyled);
     }
 }

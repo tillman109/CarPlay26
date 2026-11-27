@@ -1,3 +1,7 @@
+# CarPlay26 v0.2.84 - Native queue button
+
+Styles the queue control identified in the Now Playing capture.
+
 # CarPlay26 v0.2.83 — Find Queue and Jam in navigation bar
 
 - Searches the native navigation bar first and styles the containing item, since Queue and Jam may live outside the template content view
