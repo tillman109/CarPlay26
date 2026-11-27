@@ -16,6 +16,22 @@
 			<key>cell</key>
 			<string>PSSwitchCell</string>
 			<key>label</key>
+			<string>Follow iPhone Appearance</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>HandsetDockMaterial</string>
+			<key>default</key>
+			<true/>
+			<key>cellClass</key>
+			<string>CP26InfoSwitchCell</string>
+			<key>CP26Help</key>
+			<string>Uses a frosted dock background across CarPlay and follows the iPhone’s current Light or Dark appearance, including scheduled changes. Restart CarPlay Services after changing this switch</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
 			<string>Glass Dock</string>
 			<key>defaults</key>
 			<string>com.tillman109.carplay26</string>
@@ -42,7 +58,7 @@
 			<key>cellClass</key>
 			<string>CP26InfoSwitchCell</string>
 			<key>CP26Help</key>
-			<string>Adds a clearer tint, a highlight and a fine rim to the glass dock. Turn on Glass Dock too, then restart CarPlay Services</string>
+			<string>Selects the earlier highlighted finish when Follow iPhone Appearance is off and Glass Dock is on. Restart CarPlay Services to apply</string>
 		</dict>
 		<dict>
 			<key>cell</key>

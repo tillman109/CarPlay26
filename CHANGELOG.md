@@ -1,3 +1,9 @@
+# CarPlay26 v0.2.85 — Phone, Messages and dock appearance
+
+- Adds compact Phone tabs and styles the native contacts and conversation lists
+- Adds a left-aligned Messages title and a circular compose treatment
+- Adds a system-wide dock material that follows the iPhone’s resolved appearance independently of dock layout
+
 # CarPlay26 v0.2.84 - Native queue button
 
 Styles the queue control identified in the Now Playing capture.

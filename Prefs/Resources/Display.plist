@@ -12,7 +12,7 @@
 			<key>label</key>
 			<string>Glass appearance</string>
 			<key>footerText</key>
-			<string>Automatic follows the vehicle’s light or dark appearance. The manual options set the glass tint</string>
+			<string>Automatic follows the vehicle’s light or dark appearance. The manual options set the glass tint. The dock has its own Follow iPhone Appearance switch</string>
 		</dict>
 		<dict>
 			<key>cell</key>

@@ -74,6 +74,22 @@
 		</dict>
 		<dict>
 			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>label</key>
+			<string>Phone &amp; Messages</string>
+			<key>defaults</key>
+			<string>com.tillman109.carplay26</string>
+			<key>key</key>
+			<string>CommunicationAppearance</string>
+			<key>default</key>
+			<true/>
+			<key>cellClass</key>
+			<string>CP26InfoSwitchCell</string>
+			<key>CP26Help</key>
+			<string>Styles the CarPlay contact and conversation lists, Phone tabs and Messages compose button. Respring after changing this setting</string>
+		</dict>
+		<dict>
+			<key>cell</key>
 			<string>PSLinkCell</string>
 			<key>label</key>
 			<string>Spotify</string>

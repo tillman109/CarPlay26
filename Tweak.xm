@@ -1,3 +1,4 @@
+#import "CommunicationAppearance.h"
 #import "SpotifyReference.h"
 #import <Foundation/Foundation.h>
 #import <CoreFoundation/CoreFoundation.h>
@@ -21,7 +22,7 @@ static NSString *CP26Mode(void) {
 }
 static NSString *mode;
 static BOOL dockEnabled, dockGlassEnabled, dockLiquidStyle, labelsEnabled, cardsEnabled, iconsEnabled, controlsEnabled, diagnosticsEnabled;
-static BOOL dockShortcutProbeEnabled;
+static BOOL dockShortcutProbeEnabled, useExistingDockLayout, useHandsetDockMaterial;
 static NSString *pinnedDockBundle;
 static NSUInteger pinGeneratedCount, pinAppliedCount;
 static NSString *pinLastResult;
@@ -610,13 +611,16 @@ static void PrimeMediaControl(UIView *v) {
 // The actual local status bar is a short window in the CarPlay process.
 // Decorate the local dock and constrain its composited output to a capsule.
 // Size and route the local controls in the same dock coordinate space.
+static BOOL BottomDock(CGRect b) {
+    return b.size.width >= 250 && b.size.height >= 28 && b.size.height <= 85 && b.size.width >= 4*b.size.height;
+}
 static UIView *DockRoot(UIWindow *w) {
     if (!Named(w,@"DBStatusBarWindow") ||
         ![w.windowScene.session.role isEqualToString:@"UIWindowSceneSessionRoleCarPlay"] ||
         ![NSStringFromClass(w.rootViewController.class) isEqualToString:@"DBRootStatusBarViewController"]) return nil;
     CGRect b = w.bounds;
-    if (!ValidRect(b) || b.size.width < 250 || b.size.height < 28 || b.size.height > 85 ||
-        b.size.width < b.size.height * 4) return nil;
+    BOOL side = b.size.height >= 180 && b.size.width >= 28 && b.size.width <= 100 && b.size.height >= 2.5*b.size.width;
+    if (!ValidRect(b) || !(BottomDock(b) || (useHandsetDockMaterial && side))) return nil;
     UIView *root = w.rootViewController.viewIfLoaded;
     return root && root.window == w ? root : nil;
 }
@@ -637,7 +641,7 @@ static CGRect CompactDockRect(CGRect bounds) {
     return CGRectInset(bounds,4*u,2*u);
 }
 static void ClipLocalDockWindow(UIWindow *w, NSHashTable<UIView *> *keep) {
-    if (!dockGlassEnabled || !dockMasks || !DockRoot(w)) return;
+    if (!useExistingDockLayout || !BottomDock(w.bounds) || !dockMasks || !DockRoot(w)) return;
     CALayer *backing = w.layer;
     CGRect bounds = backing.bounds;
     CGRect capsule=CGRectInset(CompactDockRect(bounds),-.4,-.4);
@@ -716,50 +720,7 @@ static void RestoreDockBacking(UIView *v, NSDictionary *original) {
     v.opaque = [original[@"opaque"] boolValue];
     v.layer.opaque = [original[@"layerOpaque"] boolValue];
 }
-static BOOL ApplyDock(UIWindow *w, NSHashTable<UIView *> *keep, NSHashTable<UIView *> *maskKeep, NSHashTable<UIView *> *backingKeep) {
-    if (!dockGlassEnabled || !dockOverlays || !dockSurfaces || !NSThread.isMainThread) return NO;
-    UIView *root = DockRoot(w);
-    if (!root || !Visible(w) || !Visible(root)) return NO;
-    UIView *v = [dockSurfaces objectForKey:w];
-    // Only install in a root containing a confirmed native full-bar effect.
-    // If a third-party/native mask is already present, do not replace it.
-    BOOL confirmed = NO;
-    for (UIView *child in root.subviews) {
-        if (!DockNativeBackground(child,w)) continue;
-        confirmed = YES;
-        if (child.layer.mask && child.layer.mask != [dockMasks objectForKey:child]) {
-            return NO;
-        }
-    }
-    if (!confirmed && !v) return NO;
-    UIUserInterfaceStyle native = root.traitCollection.userInterfaceStyle;
-    if (native == UIUserInterfaceStyleUnspecified) native = w.traitCollection.userInterfaceStyle;
-    UIUserInterfaceStyle theme = Theme(native);
-    if (native == UIUserInterfaceStyleUnspecified || theme == UIUserInterfaceStyleUnspecified) return NO;
-    CGRect frame=CompactDockRect(root.bounds);
-    if (!ValidRect(frame)) return NO;
-    BOOL dark = theme == UIUserInterfaceStyleDark;
-    BOOL nativeDark = native == UIUserInterfaceStyleDark;
-    [CATransaction begin];
-    [CATransaction setDisableActions:YES];
-    if (!v) {
-        // The shared surface sits behind the native apps and status indicators.
-        v = [[UIView alloc] initWithFrame:frame];
-        v.opaque = NO;
-        v.layer.opaque = NO;
-        v.backgroundColor = UIColor.clearColor;
-        v.userInteractionEnabled = NO;
-        v.accessibilityElementsHidden = YES;
-        v.layer.name = @"CarPlay26.DockFixedTint";
-        [dockSurfaces setObject:v forKey:w];
-    }
-    if (!CGRectEqualToRect(v.frame,frame)) v.frame = frame;
-    v.layer.cornerRadius = frame.size.height*.4;
-    v.clipsToBounds = YES;
-    if (v.superview != root || root.subviews.firstObject != v) {
-        if (v.superview == root) [root sendSubviewToBack:v];
-        else { [v removeFromSuperview]; [root insertSubview:v atIndex:0]; }
-    }
+static void ApplyLegacyDockMaterial(UIView *v, CGRect frame, BOOL dark, BOOL nativeDark) {
     CAGradientLayer *layer = [dockOverlays objectForKey:v];
     if (!layer) {
         layer = [CAGradientLayer layer];
@@ -771,7 +732,6 @@ static BOOL ApplyDock(UIWindow *w, NSHashTable<UIView *> *keep, NSHashTable<UIVi
     layer.masksToBounds = YES;
     layer.startPoint = CGPointMake(.1,0);
     layer.endPoint = CGPointMake(.85,1);
-    CP26ReferenceDock(w,root,frame,YES);
     CP26GlassPill(v,v.layer.cornerRadius);
     UIColor *top=dark ? [UIColor colorWithRed:.25 green:.25 blue:.29 alpha:.73] :
         [UIColor colorWithWhite:.89 alpha:nativeDark?.42:.76];
@@ -861,6 +821,56 @@ static BOOL ApplyDock(UIWindow *w, NSHashTable<UIView *> *keep, NSHashTable<UIVi
         [sheen removeFromSuperlayer];
         [rim removeFromSuperlayer];
         [shade removeFromSuperlayer];
+    }
+}
+static BOOL ApplyDock(UIWindow *w, NSHashTable<UIView *> *keep, NSHashTable<UIView *> *maskKeep, NSHashTable<UIView *> *backingKeep) {
+    if (!dockGlassEnabled || !dockOverlays || !dockSurfaces || !NSThread.isMainThread) return NO;
+    UIView *root = DockRoot(w);
+    if (!root || !Visible(w) || !Visible(root)) return NO;
+    UIView *v = [dockSurfaces objectForKey:w];
+    // Only install in a root containing a confirmed native full-bar effect.
+    // If a third-party/native mask is already present, do not replace it.
+    BOOL confirmed = NO;
+    for (UIView *child in root.subviews) {
+        if (!DockNativeBackground(child,w)) continue;
+        confirmed = YES;
+        if (child.layer.mask && child.layer.mask != [dockMasks objectForKey:child]) {
+            return NO;
+        }
+    }
+    if (!confirmed && !v) return NO;
+    UIUserInterfaceStyle native = root.traitCollection.userInterfaceStyle;
+    if (native == UIUserInterfaceStyleUnspecified) native = w.traitCollection.userInterfaceStyle;
+    UIUserInterfaceStyle theme = useHandsetDockMaterial ? CP26HandsetStyle() : Theme(native);
+    if (theme == UIUserInterfaceStyleUnspecified) return NO;
+    CGRect frame = useExistingDockLayout && BottomDock(w.bounds) ? CompactDockRect(root.bounds) : root.bounds;
+    if (!ValidRect(frame)) return NO;
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    if (!v) {
+        // The shared surface sits behind the native apps and status indicators.
+        v = useHandsetDockMaterial ? [[CP26MaterialView alloc] initWithFrame:frame] : [[UIView alloc] initWithFrame:frame];
+        v.opaque = NO;
+        v.layer.opaque = NO;
+        v.backgroundColor = UIColor.clearColor;
+        v.userInteractionEnabled = NO;
+        v.accessibilityElementsHidden = YES;
+        v.layer.name = @"CarPlay26.DockFixedTint";
+        [dockSurfaces setObject:v forKey:w];
+    }
+    if (!CGRectEqualToRect(v.frame,frame)) v.frame = frame;
+    v.layer.cornerRadius = MIN(frame.size.width, frame.size.height)*.4;
+    v.clipsToBounds = YES;
+    if (v.superview != root || root.subviews.firstObject != v) {
+        if (v.superview == root) [root sendSubviewToBack:v];
+        else { [v removeFromSuperview]; [root insertSubview:v atIndex:0]; }
+    }
+    if (useExistingDockLayout && BottomDock(w.bounds)) CP26ReferenceDock(w,root,frame,YES);
+    if (useHandsetDockMaterial) {
+        CP26MaterialView *material = (CP26MaterialView *)v;
+        [material applyStyle:theme radius:v.layer.cornerRadius];
+    } else {
+        ApplyLegacyDockMaterial(v, frame, theme == UIUserInterfaceStyleDark, native == UIUserInterfaceStyleDark);
     }
     SuppressDockBackgrounds(w,maskKeep);
     ClipLocalDockWindow(w,maskKeep);
@@ -1713,7 +1723,11 @@ static void CP26RequestWallpaperReports(void) {
         if (!CP26Bool(@"Enabled")) return;
         mode = [CP26Mode() copy];
         dockEnabled = CP26Bool(@"GlassDock");
-        dockGlassEnabled = CP26Bool(@"GlassDockAppearance");
+        useExistingDockLayout = CP26Bool(@"GlassDockAppearance");
+        Boolean hasDockChoice = false;
+        useHandsetDockMaterial = CFPreferencesGetAppBooleanValue(CFSTR("HandsetDockMaterial"), CFSTR("com.tillman109.carplay26"), &hasDockChoice);
+        if (!hasDockChoice) useHandsetDockMaterial = YES;
+        dockGlassEnabled = useExistingDockLayout || useHandsetDockMaterial;
         dockLiquidStyle = CP26Bool(@"DockLiquidStyle");
         labelsEnabled = CP26Bool(@"GlassLabels");
         cardsEnabled = CP26Bool(@"GlassCards");
