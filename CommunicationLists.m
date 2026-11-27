@@ -1,229 +1,187 @@
 #import "CommunicationUI.h"
-#import <CarPlay/CarPlay.h>
 #import <QuartzCore/QuartzCore.h>
 
-// In iOS 16 Contacts uses a UICollectionViewListCell. Messages' list template supplies a
-// CPUIMessageCell with the resolved contact image, title, timestamp and state glyphs.
 @protocol CP26MessageParts <NSObject>
 - (UILabel *)primaryLabel;
 - (UILabel *)secondaryLabel;
 - (UILabel *)trailingLabel;
 - (UIImageView *)primaryImageView;
+- (UIImageView *)unreadImageView;
 - (UIImageView *)leadingGlyphView;
 - (UIImageView *)trailingGlyphView;
 - (UIImageView *)trailingImageView;
-- (UIImageView *)unreadImageView;
 @end
+
 static BOOL NamedKind(UIView *view, NSString *name) { return [view isKindOfClass:NSClassFromString(name)]; }
-static UIImage *VisibleImage(UIImageView *view) { return !view.hidden && view.alpha>.01 ? view.image : nil; }
 static UIColor *Primary(BOOL dark) { return dark ? UIColor.whiteColor : UIColor.blackColor; }
 static UIColor *Secondary(BOOL dark) { return [UIColor colorWithWhite:dark ? 1 : 0 alpha:dark ? .72 : .67]; }
 
-@interface CP26Row : UIView
-@property(nonatomic,strong) UILabel *title, *detail, *time;
-@property(nonatomic,strong) UIImageView *avatar, *status, *chevron, *leading;
-@property(nonatomic,strong) UIView *line;
-@end
-@implementation CP26Row
-- (instancetype)initWithFrame:(CGRect)frame {
-    if ((self=[super initWithFrame:frame])) {
-        self.autoresizingMask=UIViewAutoresizingFlexibleWidth|UIViewAutoresizingFlexibleHeight;
-        self.userInteractionEnabled=NO; self.accessibilityElementsHidden=YES;
-        _title=[UILabel new]; _detail=[UILabel new]; _time=[UILabel new];
-        _title.font=[UIFont systemFontOfSize:12.2 weight:UIFontWeightMedium];
-        _detail.font=[UIFont systemFontOfSize:9.5]; _time.font=[UIFont systemFontOfSize:12];
-        _avatar=[UIImageView new]; _avatar.clipsToBounds=YES;
-        _leading=[UIImageView new]; _status=[UIImageView new]; _chevron=[UIImageView new];
-        _leading.contentMode=_status.contentMode=_chevron.contentMode=UIViewContentModeScaleAspectFit;
-        _chevron.image=[UIImage systemImageNamed:@"chevron.forward" withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:10 weight:UIImageSymbolWeightSemibold]];
-        _line=[UIView new];
-        for (UIView *v in @[_title,_detail,_time,_avatar,_leading,_status,_chevron,_line]) [self addSubview:v];
-    }
-    return self;
+// Build each background configuration once. UITableViewCell's setter may copy it.
+static UIBackgroundConfiguration *RowBackground(BOOL dark, BOOL highlighted) {
+    static UIBackgroundConfiguration *clear, *lightSelection, *darkSelection;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        clear=[UIBackgroundConfiguration clearConfiguration];
+        lightSelection=[clear copy]; lightSelection.backgroundColor=[UIColor colorWithWhite:0 alpha:.15];
+        darkSelection=[clear copy]; darkSelection.backgroundColor=[UIColor colorWithWhite:1 alpha:.15];
+    });
+    return highlighted ? (dark ? darkSelection : lightSelection) : clear;
 }
-@end
+void CP26CommunicationRowBackground(UITableViewCell *cell) {
+    CP26CommunicationStyle *s=CP26StyleForView(cell,CP26AppForView(cell)!=CP26OtherApp);
+    if (!s) return;
+    BOOL dark=cell.traitCollection.userInterfaceStyle==UIUserInterfaceStyleDark;
+    [s set:RowBackground(dark,cell.focused||cell.highlighted||cell.selected) key:@"backgroundConfiguration" on:cell];
+    [s set:UIColor.clearColor key:@"backgroundColor" on:cell];
+    [s set:UIColor.clearColor key:@"backgroundColor" on:cell.contentView];
+    [s set:@NO key:@"opaque" on:cell.contentView];
+}
+void CP26CommunicationList(UIScrollView *list) {
+    CP26CommunicationApp app=CP26AppForView(list);
+    BOOL table=[list isKindOfClass:UITableView.class];
+    CP26CommunicationStyle *s=CP26StyleForView(list,app!=CP26OtherApp && (table || NamedKind(list,@"CNContactListCollectionView")));
+    if (!s) return;
+    if (!s.field) s.field=[CP26CommunicationBackdrop new];
+    [s set:s.field key:@"backgroundView" on:list];
+    [s set:UIColor.clearColor key:@"backgroundColor" on:list];
+    [s set:@NO key:@"opaque" on:list];
+    if (table) {
+        [s set:@(UITableViewCellSeparatorStyleSingleLine) key:@"separatorStyle" on:list];
+        BOOL dark=list.traitCollection.userInterfaceStyle==UIUserInterfaceStyleDark;
+        [s set:[UIColor colorWithWhite:dark ? 1 : 0 alpha:dark ? .21 : .24] key:@"separatorColor" on:list];
+    }
+}
 
-// Only list coordinates are projected. Cell and accessory hit rectangles remain owned by the data source.
-static CGRect RowBox(UIView *cell, CGFloat x, CGFloat y, CGFloat w, CGFloat h) {
-    if (cell.effectiveUserInterfaceLayoutDirection==UIUserInterfaceLayoutDirectionRightToLeft) x=cell.bounds.size.width-x-w;
-    return CGRectMake(x,y,MAX(0,w),h);
-}
-static CGFloat LeadingInCell(UIView *cell, CGFloat fromWindow) {
-    CGRect box=[cell convertRect:cell.bounds toView:cell.window];
-    BOOL rtl=cell.effectiveUserInterfaceLayoutDirection==UIUserInterfaceLayoutDirectionRightToLeft;
-    CGFloat inset=rtl ? cell.window.bounds.size.width-CGRectGetMaxX(box) : CGRectGetMinX(box);
-    return MAX(0,fromWindow-inset);
-}
-static CGFloat TrailingInCell(UIView *cell, CGFloat fromWindow) {
-    CGRect box=[cell convertRect:cell.bounds toView:cell.window];
-    BOOL rtl=cell.effectiveUserInterfaceLayoutDirection==UIUserInterfaceLayoutDirectionRightToLeft;
-    CGFloat inset=rtl ? CGRectGetMinX(box) : cell.window.bounds.size.width-CGRectGetMaxX(box);
-    return MAX(0,fromWindow-inset);
-}
-static void ClearCell(UIView *cell, CP26CommunicationStyle *s, BOOL active) {
-    UIBackgroundConfiguration *bg=[UIBackgroundConfiguration clearConfiguration];
-    if (active) bg.backgroundColor=[UIColor colorWithWhite:cell.traitCollection.userInterfaceStyle==UIUserInterfaceStyleDark ? 1 : 0 alpha:.15];
-    [s set:bg key:@"backgroundConfiguration" on:cell]; [s set:UIColor.clearColor key:@"backgroundColor" on:cell];
-}
-static NSString *ContactTitle(UICollectionViewCell *cell) {
-    id config=cell.contentConfiguration;
-    if ([config isKindOfClass:UIListContentConfiguration.class]) {
-        UIListContentConfiguration *list=config;
-        return list.attributedText.string.length ? list.attributedText.string : list.text;
+// Collection view sizing and index navigation belong to ContactsUI. Change a native
+// configuration once, when the data source supplies it; never measure or update a contact in layoutSubviews.
+void CP26ConfigureContact(UICollectionReusableView *view, UICollectionView *list, BOOL sectionHeader) {
+    if (![view isKindOfClass:UICollectionViewCell.class]) return;
+    CP26CommunicationStyle *s=CP26StyleForView(view,CP26AppForView(list)==CP26PhoneApp);
+    if (!s) return;
+    UICollectionViewCell *cell=(UICollectionViewCell *)view;
+    BOOL dark=list.traitCollection.userInterfaceStyle==UIUserInterfaceStyleDark;
+    [s set:RowBackground(dark,cell.focused||cell.highlighted||cell.selected) key:@"backgroundConfiguration" on:cell];
+    [s set:UIColor.clearColor key:@"backgroundColor" on:cell];
+    if ([cell.contentConfiguration isKindOfClass:UIListContentConfiguration.class] &&
+        !UIContentSizeCategoryIsAccessibilityCategory(list.traitCollection.preferredContentSizeCategory)) {
+        UIListContentConfiguration *config=[(UIListContentConfiguration *)cell.contentConfiguration copy];
+        config.textProperties.font=[UIFont systemFontOfSize:sectionHeader ? 11 : 12.2 weight:UIFontWeightMedium];
+        NSDirectionalEdgeInsets margins=config.directionalLayoutMargins;
+        margins.top=8; margins.bottom=8;
+        config.directionalLayoutMargins=margins;
+        [s set:config key:@"contentConfiguration" on:cell];
     }
-    for (UIView *view in cell.contentView.subviews) {
-        if ([view isKindOfClass:UILabel.class]) return ((UILabel *)view).text;
-        for (UIView *child in view.subviews) if ([child isKindOfClass:UILabel.class]) return ((UILabel *)child).text;
+    if (sectionHeader && NamedKind(view,@"CNContactListSectionHeaderFooterView")) {
+        [s concealDrawing:[view valueForKey:@"visualEffectView"]];
+    }
+}
+
+static UIView *SiriPlatter(UIView *view) {
+    if (NamedKind(view,@"CNStarkHeaderPlatterView")) return view;
+    for (UIView *subview in view.subviews) {
+        UIView *platter=SiriPlatter(subview);
+        if (platter) return platter;
     }
     return nil;
 }
-static CPMessageListItem *MessageModel(UITableViewCell *cell) {
-    UIView *parent=cell.superview;
-    while (parent && ![parent isKindOfClass:UITableView.class]) parent=parent.superview;
-    UITableView *table=(UITableView *)parent;
-    NSIndexPath *path=[table indexPathForCell:cell];
-    id item=path ? CP26BrowseModel(table,path) : nil;
-    return [item isKindOfClass:CPMessageListItem.class] ? item : nil;
-}
-void CP26CommunicationCell(UIView *cell) {
-    CP26CommunicationApp app=CP26AppForView(cell);
-    BOOL contact=app==CP26PhoneApp && NamedKind(cell,@"CNContactListCollectionViewCell");
-    BOOL tableRow=[cell isKindOfClass:UITableViewCell.class];
-    BOOL nativeMessage=app==CP26MessagesApp && tableRow && [cell respondsToSelector:@selector(primaryLabel)] && [cell respondsToSelector:@selector(primaryImageView)];
-    UITableViewCell *tableCell=tableRow ? (UITableViewCell *)cell : nil;
-    UICollectionViewCell *contactCell=contact ? (UICollectionViewCell *)cell : nil;
-    BOOL regularPhone=app==CP26PhoneApp && tableRow;
-    if (regularPhone) {
-        CP26CommunicationStyle *s=CP26StyleForView(cell,YES);
-        ClearCell(cell,s,cell.focused||tableCell.highlighted||tableCell.selected);
-        return;
-    }
-    id<CP26MessageParts> parts=nativeMessage ? (id)cell : nil;
-    CPMessageListItem *model=app==CP26MessagesApp && tableRow && !nativeMessage ? MessageModel(tableCell) : nil;
-    BOOL message=nativeMessage || model!=nil;
-    NSString *title=contact ? ContactTitle(contactCell) : (parts.primaryLabel.text ?: model.text);
-    CP26CommunicationStyle *s=CP26StyleForView(cell,title.length && (contact||message));
-    if (!s) return;
-    BOOL dark=cell.traitCollection.userInterfaceStyle==UIUserInterfaceStyleDark;
-    BOOL active=cell.focused||tableCell.highlighted||tableCell.selected||contactCell.highlighted||contactCell.selected;
-    ClearCell(cell,s,active);
-    UIView *content=contact ? contactCell.contentView : tableCell.contentView;
-    [s concealDrawing:content];
-    CP26Row *row=(CP26Row *)s.face;
-    if (!row) { row=[[CP26Row alloc] initWithFrame:cell.bounds]; s.face=row; [cell addSubview:row]; }
-    row.frame=cell.bounds; if (cell.subviews.lastObject!=row) [cell bringSubviewToFront:row];
-    CGFloat w=cell.bounds.size.width, h=cell.bounds.size.height, cy=h/2;
-    BOOL rtl=cell.effectiveUserInterfaceLayoutDirection==UIUserInterfaceLayoutDirectionRightToLeft;
-    CGFloat x=LeadingInCell(cell,message ? 58 : 20), end=w-TrailingInCell(cell,message ? 29 : 40);
-    CGFloat textEnd=end;
-    row.title.text=title; row.title.textColor=Primary(dark); row.title.textAlignment=rtl ? NSTextAlignmentRight : NSTextAlignmentLeft;
-    row.detail.textColor=row.time.textColor=Secondary(dark); row.detail.textAlignment=row.title.textAlignment;
-    row.time.textAlignment=rtl ? NSTextAlignmentLeft : NSTextAlignmentRight;
-    row.detail.text=nil; row.time.text=nil;
-    row.avatar.hidden=row.chevron.hidden=row.status.hidden=row.leading.hidden=!message;
-    if (message) {
-        UIImage *avatar=VisibleImage(parts.primaryImageView) ?: model.leadingConfiguration.leadingImage;
-        CGFloat diameter=MIN(24,MAX(0,h-4));
-        row.avatar.frame=RowBox(cell,LeadingInCell(cell,27),cy-diameter/2,diameter,diameter);
-        row.avatar.layer.cornerRadius=diameter/2;
-        row.avatar.contentMode=avatar ? UIViewContentModeScaleAspectFill : UIViewContentModeScaleAspectFit;
-        row.avatar.image=avatar ?: [UIImage systemImageNamed:@"person.crop.circle.fill"];
-        row.avatar.tintColor=UIColor.whiteColor; row.avatar.backgroundColor=avatar ? UIColor.clearColor : [UIColor colorWithRed:.55 green:.63 blue:.80 alpha:1];
-        UIImageView *unread=[parts respondsToSelector:@selector(unreadImageView)] ? parts.unreadImageView : nil;
-        UIImageView *leading=[parts respondsToSelector:@selector(leadingGlyphView)] ? parts.leadingGlyphView : nil;
-        row.leading.image=VisibleImage(unread) ?: VisibleImage(leading);
-        if (!row.leading.image && model.leadingConfiguration.isUnread) row.leading.image=[UIImage systemImageNamed:@"circle.fill"];
-        row.leading.hidden=!row.leading.image;
-        row.leading.tintColor=unread.tintColor ?: leading.tintColor;
-        row.leading.frame=RowBox(cell,LeadingInCell(cell,13),cy-4,8,8);
-        UIImageView *trailing=[parts respondsToSelector:@selector(trailingGlyphView)] ? parts.trailingGlyphView : nil;
-        UIImageView *trailingImage=[parts respondsToSelector:@selector(trailingImageView)] ? parts.trailingImageView : nil;
-        row.status.image=VisibleImage(trailing) ?: VisibleImage(trailingImage) ?: model.trailingConfiguration.trailingImage; row.status.hidden=!row.status.image;
-        row.status.tintColor=Secondary(dark); row.chevron.tintColor=[Secondary(dark) colorWithAlphaComponent:.47];
-        CGFloat arrowX=end-16;
-        row.chevron.frame=RowBox(cell,arrowX,cy-5,7,10);
-        // Preserve a native trailing state glyph in the trailing slot when present.
-        row.status.frame=RowBox(cell,arrowX-2,cy-6,11,12); row.chevron.hidden=!row.status.hidden;
-        UILabel *timestamp=[parts respondsToSelector:@selector(trailingLabel)] ? parts.trailingLabel : nil;
-        UILabel *subtitle=[parts respondsToSelector:@selector(secondaryLabel)] ? parts.secondaryLabel : nil;
-        NSString *trailingText=timestamp.text ?: model.trailingText;
-        NSString *detail=subtitle.text ?: model.detailText;
-        row.time.text=trailingText.length ? trailingText : detail;
-        if (trailingText.length && !subtitle.hidden && ![detail isEqual:trailingText]) row.detail.text=detail;
-        CGFloat tw=MIN(MAX(0,(end-x)*.48),ceil([row.time sizeThatFits:CGSizeMake(CGFLOAT_MAX,h)].width));
-        row.time.frame=RowBox(cell,arrowX-5-tw,0,tw,h); textEnd=arrowX-10-tw;
-    }
-    BOOL twoLines=row.detail.text.length>0;
-    row.title.frame=RowBox(cell,x,twoLines ? cy-13 : 0,MAX(0,textEnd-x),twoLines ? 16 : h);
-    row.detail.frame=RowBox(cell,x,cy+2,MAX(0,textEnd-x),12);
-    CGFloat pixel=1/MAX(1,cell.window.screen.scale);
-    row.line.backgroundColor=[UIColor colorWithWhite:dark ? 1 : 0 alpha:dark ? .21 : .24];
-    row.line.frame=RowBox(cell,x,h-pixel,MAX(0,end-x),pixel);
-}
-
-void CP26CommunicationList(UIScrollView *list) {
-    CP26CommunicationApp app=CP26AppForView(list);
-    BOOL collection=app==CP26PhoneApp && NamedKind(list,@"CNContactListCollectionView");
-    BOOL table=[list isKindOfClass:UITableView.class] && app!=CP26OtherApp;
-    CP26CommunicationStyle *s=CP26StyleForView(list,collection||table);
-    if (!s) return;
-    if (!s.field) s.field=[CP26CommunicationBackdrop new];
-    [s set:s.field key:@"backgroundView" on:list]; [s set:UIColor.clearColor key:@"backgroundColor" on:list];
-    [s set:@NO key:@"opaque" on:list];
-    if (table) {
-        UITableView *tv=(UITableView *)list;
-        BOOL messages=app==CP26MessagesApp;
-        // Rows with a custom face draw their own pixel rule. Other Phone tables retain UIKit's separators.
-        [s set:@(messages ? UITableViewCellSeparatorStyleNone : UITableViewCellSeparatorStyleSingleLine) key:@"separatorStyle" on:tv];
-        if (!messages) [s set:[UIColor colorWithWhite:list.traitCollection.userInterfaceStyle==UIUserInterfaceStyleDark ? 1 : 0 alpha:.24] key:@"separatorColor" on:tv];
-        for (UITableViewCell *cell in tv.visibleCells) CP26CommunicationCell(cell);
-    } else {
-        UICollectionView *cv=(UICollectionView *)list;
-        for (UICollectionViewCell *cell in cv.visibleCells) CP26CommunicationCell(cell);
-        for (UIView *decoration in cv.subviews) {
-            if (NamedKind(decoration,@"_UICollectionViewListSeparatorView")) [s concealDrawing:decoration];
-        }
-        for (UICollectionReusableView *header in [cv visibleSupplementaryViewsOfKind:UICollectionElementKindSectionHeader]) {
-            // A plain section heading lets the shared material show through as the index scrolls.
-            CP26CommunicationStyle *hs=CP26StyleForView(header,YES);
-            [hs set:UIColor.clearColor key:@"backgroundColor" on:header];
-            if ([header isKindOfClass:UICollectionViewCell.class]) ClearCell(header,hs,NO);
-            if (NamedKind(header,@"CNContactListSectionHeaderFooterView")) {
-                UIView *effect=[header valueForKey:@"visualEffectView"];
-                [hs concealDrawing:effect];
-            }
-        }
-    }
-}
-
-static void UpdateSiriCaption(UIView *parent, CP26CommunicationStyle *s, BOOL dark) {
-    for (UIView *v in parent.subviews) {
-        if ([v isKindOfClass:UILabel.class]) {
-            [s set:Primary(dark) key:@"textColor" on:v]; [s set:[UIFont systemFontOfSize:12 weight:UIFontWeightSemibold] key:@"font" on:v];
-        } else if (v!=s.face) {
-            if (NamedKind(v,@"CNStarkHeaderPlatterView")) [s set:UIColor.clearColor key:@"backgroundColor" on:v];
-            UpdateSiriCaption(v,s,dark);
-        }
-    }
-}
 void CP26CommunicationSiriRow(UIView *header) {
-    if (!header || header.bounds.size.width<=0) return;
-    CP26CommunicationStyle *s=CP26StyleForView(header,CP26AppForView(header)==CP26PhoneApp);
-    if (!s) return;
-    BOOL dark=header.traitCollection.userInterfaceStyle==UIUserInterfaceStyleDark;
-    [s set:UIColor.clearColor key:@"backgroundColor" on:header];
-    if (!s.face) { s.face=[UIView new]; s.face.userInteractionEnabled=NO; s.face.accessibilityElementsHidden=YES; [header insertSubview:s.face atIndex:0]; }
-    CGFloat left=LeadingInCell(header,11), right=TrailingInCell(header,41), height=MIN(33,header.bounds.size.height);
-    s.face.frame=RowBox(header,left,(header.bounds.size.height-height)/2,header.bounds.size.width-left-right,height);
-    s.face.layer.cornerRadius=height/2; s.face.backgroundColor=[UIColor colorWithWhite:dark ? 1 : 0 alpha:dark ? .13 : .085];
-    if (header.subviews.firstObject!=s.face) [header sendSubviewToBack:s.face];
-    UpdateSiriCaption(header,s,dark);
-    UIView *platter=NamedKind(header,@"CNStarkHeaderPlatterView") ? header : nil;
-    for (UIView *part in header.subviews) if (NamedKind(part,@"CNStarkHeaderPlatterView")) { platter=part; break; }
-    if (platter) {
-        UIView *label=[platter valueForKey:@"label"], *icon=[platter valueForKey:@"accessory"];
-        CGFloat x=left+9, end=header.bounds.size.width-right-14;
-        [s.positions place:label in:header rect:RowBox(header,x,CGRectGetMinY(s.face.frame),end-x-16,height)];
-        [s.positions place:icon in:header rect:RowBox(header,end-12,CGRectGetMidY(s.face.frame)-6,12,12)];
+    if (!header || CP26AppForView(header)!=CP26PhoneApp) return;
+    UIView *platter=SiriPlatter(header);
+    if (!platter) return;
+    CP26CommunicationStyle *s=CP26StyleForView(platter,YES);
+    BOOL dark=platter.traitCollection.userInterfaceStyle==UIUserInterfaceStyleDark;
+    [s set:[UIColor colorWithWhite:dark ? 1 : 0 alpha:dark ? .13 : .085] key:@"backgroundColor" on:platter];
+    [s set:@(MIN(16.5,platter.bounds.size.height/2)) key:@"cornerRadius" on:platter.layer];
+    [s set:Primary(dark) key:@"textColor" on:[platter valueForKey:@"label"]];
+}
+
+// Place existing views in the native cell, including parts attached outside its contentView.
+// An optional placeholder is the only decoration. Names, dates and accessory glyphs always come from UIKit.
+static CGRect RowBox(UITableViewCell *cell, CGFloat x, CGFloat y, CGFloat w, CGFloat h) {
+    if (cell.effectiveUserInterfaceLayoutDirection==UIUserInterfaceLayoutDirectionRightToLeft) x=cell.bounds.size.width-x-w;
+    return CGRectMake(x,y,MAX(0,w),h);
+}
+static UIEdgeInsets RowInsets(UITableViewCell *cell, CGFloat screenLeading, CGFloat screenTrailing) {
+    CGRect rect=[cell convertRect:cell.bounds toView:cell.window];
+    BOOL rtl=cell.effectiveUserInterfaceLayoutDirection==UIUserInterfaceLayoutDirectionRightToLeft;
+    CGFloat left=CGRectGetMinX(rect), right=cell.window.bounds.size.width-CGRectGetMaxX(rect);
+    return UIEdgeInsetsMake(0,MAX(0,(rtl ? screenTrailing : screenLeading)-left),0,MAX(0,(rtl ? screenLeading : screenTrailing)-right));
+}
+static BOOL Visible(UIView *view) { return view && !view.hidden && view.alpha>.01; }
+static UIImage *Placeholder(void) {
+    static UIImage *image;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ image=[[UIImage systemImageNamed:@"person.crop.circle.fill"] imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate]; });
+    return image;
+}
+void CP26LayoutMessage(UITableViewCell *cell) {
+    if (CP26AppForView(cell)!=CP26MessagesApp || ![cell respondsToSelector:@selector(primaryLabel)] ||
+        ![cell respondsToSelector:@selector(primaryImageView)]) return;
+    id<CP26MessageParts> parts=(id)cell;
+    UILabel *title=parts.primaryLabel;
+    if (!title || CGRectIsEmpty(cell.bounds)) return;
+    // Larger preferred sizes keep the native geometry and UIKit's original fonts.
+    if (UIContentSizeCategoryIsAccessibilityCategory(cell.traitCollection.preferredContentSizeCategory)) {
+        CP26StyleForView(cell,NO); return;
     }
+    CP26CommunicationStyle *s=CP26StyleForView(cell,YES);
+    BOOL dark=cell.traitCollection.userInterfaceStyle==UIUserInterfaceStyleDark;
+    BOOL rtl=cell.effectiveUserInterfaceLayoutDirection==UIUserInterfaceLayoutDirectionRightToLeft;
+    UIEdgeInsets insets=RowInsets(cell,58,29);
+    CGFloat x=rtl ? insets.right : insets.left;
+    CGFloat end=cell.bounds.size.width-(rtl ? insets.left : insets.right);
+    CGFloat h=cell.bounds.size.height, cy=h/2;
+    [s set:[NSValue valueWithUIEdgeInsets:insets] key:@"separatorInset" on:cell];
+    [s set:[UIFont systemFontOfSize:12.2 weight:UIFontWeightMedium] key:@"font" on:title];
+    [s set:Primary(dark) key:@"textColor" on:title];
+
+    UILabel *time=[parts respondsToSelector:@selector(trailingLabel)] ? parts.trailingLabel : nil;
+    UILabel *detail=[parts respondsToSelector:@selector(secondaryLabel)] ? parts.secondaryLabel : nil;
+    if ((!Visible(time) || !time.text.length) && Visible(detail) && detail.text.length) { time=detail; detail=nil; }
+    [s set:Secondary(dark) key:@"textColor" on:time];
+    [s set:[UIFont systemFontOfSize:12] key:@"font" on:time];
+    [s set:@(rtl ? NSTextAlignmentLeft : NSTextAlignmentRight) key:@"textAlignment" on:time];
+    CGFloat arrowX=end-16;
+    UIImageView *glyph=[parts respondsToSelector:@selector(trailingGlyphView)] ? parts.trailingGlyphView : nil;
+    UIImageView *status=[parts respondsToSelector:@selector(trailingImageView)] ? parts.trailingImageView : nil;
+    if (Visible(glyph) && glyph.image)
+        [s.positions place:glyph in:cell rect:RowBox(cell,arrowX,cy-5.5,9,11)];
+    if (Visible(status) && status.image && status!=glyph) {
+        if (Visible(glyph) && glyph.image) arrowX-=15;
+        [s.positions place:status in:cell rect:RowBox(cell,arrowX,cy-6,12,12)];
+    }
+    CGFloat timeWidth=(Visible(time) && time.text.length) ? MIN(MAX(0,(end-x)*.48),ceil([time sizeThatFits:CGSizeMake(CGFLOAT_MAX,h)].width)) : 0;
+    if (timeWidth>0) [s.positions place:time in:cell rect:RowBox(cell,arrowX-5-timeWidth,0,timeWidth,h)];
+    CGFloat textWidth=MAX(0,arrowX-10-timeWidth-x);
+    BOOL twoLines=Visible(detail) && detail.text.length>0;
+    [s.positions place:title in:cell rect:RowBox(cell,x,twoLines ? cy-13 : 0,textWidth,twoLines ? 16 : h)];
+    if (twoLines) {
+        [s set:Secondary(dark) key:@"textColor" on:detail]; [s set:[UIFont systemFontOfSize:9.5] key:@"font" on:detail];
+        [s.positions place:detail in:cell rect:RowBox(cell,x,cy+2,textWidth,12)];
+    }
+    UIImageView *avatar=parts.primaryImageView;
+    CGFloat d=MIN(24,MAX(0,h-4));
+    UIEdgeInsets avatarInsets=RowInsets(cell,27,0);
+    CGRect avatarRect=RowBox(cell,rtl ? avatarInsets.right : avatarInsets.left,cy-d/2,d,d);
+    BOOL hasPhoto=Visible(avatar) && avatar.image;
+    if (hasPhoto) {
+        [s.positions place:avatar in:cell rect:avatarRect];
+        [s set:@(d/2) key:@"cornerRadius" on:avatar.layer]; [s set:@YES key:@"clipsToBounds" on:avatar];
+        [s.face removeFromSuperview]; s.face=nil;
+    } else {
+        if (!s.face) {
+            UIImageView *placeholder=[[UIImageView alloc] initWithImage:Placeholder()];
+            placeholder.userInteractionEnabled=NO; placeholder.accessibilityElementsHidden=YES;
+            placeholder.contentMode=UIViewContentModeScaleAspectFit; placeholder.tintColor=UIColor.whiteColor;
+            placeholder.backgroundColor=[UIColor colorWithRed:.55 green:.63 blue:.80 alpha:1];
+            placeholder.clipsToBounds=YES; s.face=placeholder; [cell addSubview:placeholder];
+        }
+        if (!CGRectEqualToRect(s.face.frame,avatarRect)) s.face.frame=avatarRect;
+        if (s.face.layer.cornerRadius!=d/2) s.face.layer.cornerRadius=d/2;
+    }
+    UIImageView *unread=[parts respondsToSelector:@selector(unreadImageView)] ? parts.unreadImageView : nil;
+    UIImageView *leading=[parts respondsToSelector:@selector(leadingGlyphView)] ? parts.leadingGlyphView : nil;
+    UIEdgeInsets markInsets=RowInsets(cell,10,0); CGFloat markX=rtl ? markInsets.right : markInsets.left;
+    if (Visible(unread) && unread.image) [s.positions place:unread in:cell rect:RowBox(cell,markX,cy-3.5,7,7)];
+    if (Visible(leading) && leading.image) [s.positions place:leading in:cell rect:RowBox(cell,markX+(Visible(unread) && unread.image ? 8 : 0),cy-3.5,7,7)];
 }

@@ -45,3 +45,15 @@ jobs:
           name: CarPlay26-deb
           path: packages/*.deb
           if-no-files-found: error
+
+      - name: Build T9Dialer CarPlay support
+        run: |
+          gmake -C T9Compatibility all FINALPACKAGE=1
+          cp T9Compatibility/.theos/obj/T9CarPlaySupport "$RUNNER_TEMP/T9CarPlaySupport"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: T9-CarPlay-support
+          path: ${{ runner.temp }}/T9CarPlaySupport
+          if-no-files-found: error
+      - name: Check conversation reuse and handset/CarPlay keypad routing
+        run: bash tests/run-communication-simulator.sh

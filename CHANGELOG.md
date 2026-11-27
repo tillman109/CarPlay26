@@ -1,3 +1,8 @@
+# CarPlay26 v0.2.86 — Contacts and Messages rows
+
+- Lets ContactsUI size its own cells and applies styling when cells are supplied
+- Positions the native conversation labels and indicators, with a placeholder for missing avatars
+
 # CarPlay26 v0.2.85 — Phone, Messages and dock appearance
 
 - Adds compact Phone tabs and styles the native contacts and conversation lists

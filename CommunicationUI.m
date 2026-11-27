@@ -14,7 +14,14 @@ static BOOL ReadSettings(void) {
     return (!found || selected) && CFPreferencesGetAppBooleanValue(CFSTR("Enabled"), prefDomain, NULL);
 }
 static void RefreshSurfaces(UIView *view) {
-    if (!communicationEnabled) CP26StyleForView(view, NO);
+    if (!communicationEnabled) {
+        CP26StyleForView(view, NO);
+    } else if ([view isKindOfClass:UITableView.class] || [view isKindOfClass:NSClassFromString(@"CNContactListCollectionView")]) {
+        CP26CommunicationList((UIScrollView *)view);
+    } else if ([view isKindOfClass:UITableViewCell.class] && CP26AppForView(view)!=CP26OtherApp) {
+        CP26CommunicationRowBackground((UITableViewCell *)view);
+        [view setNeedsLayout];
+    }
     if ([view isKindOfClass:UIScrollView.class] || [view isKindOfClass:UITabBar.class] ||
         [view isKindOfClass:UINavigationBar.class] || [view isKindOfClass:UISegmentedControl.class]) [view setNeedsLayout];
     for (UIView *child in view.subviews) RefreshSurfaces(child);
@@ -101,13 +108,13 @@ CP26CommunicationApp CP26AppForView(UIView *view) {
     if (!object) return;
     id current = [object valueForKey:key] ?: NSNull.null;
     id next = value ?: NSNull.null;
-    if ([current isEqual:next]) return;
     NSMutableDictionary *edits = [_edits objectForKey:object];
-    if (!edits) { edits = [NSMutableDictionary dictionary]; [_edits setObject:edits forKey:object]; }
     NSArray *entry = edits[key];
+    if ([current isEqual:next] || ([current isEqual:entry.lastObject] && [next isEqual:entry[1]])) return;
+    if (!edits) { edits = [NSMutableDictionary dictionary]; [_edits setObject:edits forKey:object]; }
     id original = [current isEqual:entry.lastObject] ? entry.firstObject : current;
     [object setValue:value forKey:key];
-    edits[key] = @[original, [object valueForKey:key] ?: NSNull.null];
+    edits[key] = @[original, next, [object valueForKey:key] ?: NSNull.null];
 }
 - (void)concealDrawing:(UIView *)view {
     if (!view || view.layer.mask) return;
@@ -136,8 +143,8 @@ CP26CommunicationStyle *CP26StyleForView(UIView *view, BOOL active) {
         style = [CP26CommunicationStyle new];
         objc_setAssociatedObject(view, &key, style, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     } else if (!active && style) {
-        [style restore];
         objc_setAssociatedObject(view, &key, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [style restore];
         return nil;
     }
     return style;

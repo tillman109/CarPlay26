@@ -18,6 +18,14 @@
 			<key>cell</key>
 			<string>PSGroupCell</string>
 			<key>label</key>
+			<string>v0.2.86 — Contacts and Messages rows</string>
+			<key>footerText</key>
+			<string>Contacts uses its native cell sizing. Messages styles the existing conversation labels, timestamps and indicators.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
 			<string>v0.2.85 — Phone, Messages and dock appearance</string>
 			<key>footerText</key>
 			<string>Compact Phone tabs, translucent lists, a circular Messages compose control and a dock background that follows iPhone appearance</string>
