@@ -14,6 +14,7 @@
             <string>MobileMaps</string>
             <string>CarPlayTemplateUIHost</string>
             <string>MobilePhone</string>
+            <string>InCallService</string>
         </array>
     </dict>
 </dict>

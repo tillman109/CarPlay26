@@ -2,6 +2,7 @@
 #import <objc/runtime.h>
 
 static BOOL communicationEnabled;
+BOOL CP26CallAppearanceEnabled(void) { return communicationEnabled; }
 static CFStringRef const prefDomain = CFSTR("com.tillman109.carplay26");
 static CFStringRef const stateRequest = CFSTR("com.tillman109.carplay26.communications.request");
 static CFStringRef const stateOn = CFSTR("com.tillman109.carplay26.communications.on");
@@ -14,6 +15,7 @@ static BOOL ReadSettings(void) {
     return (!found || selected) && CFPreferencesGetAppBooleanValue(CFSTR("Enabled"), prefDomain, NULL);
 }
 static void RefreshSurfaces(UIView *view) {
+    if ([view.nextResponder isKindOfClass:NSClassFromString(@"PHCarPlayMainInCallViewController")]) [view setNeedsLayout];
     if (!communicationEnabled) {
         CP26StyleForView(view, NO);
     } else if ([view isKindOfClass:UITableView.class] || [view isKindOfClass:NSClassFromString(@"CNContactListCollectionView")]) {

@@ -167,6 +167,7 @@ static void InstallTemplateHooks(void) {
         BOOL phone=[process isEqualToString:@"MobilePhone"];
         BOOL templates=[process isEqualToString:@"CarPlayTemplateUIHost"];
         if ([process isEqualToString:@"CarPlay"]) { CP26StartCommunicationPreferences(YES); return; }
+        if ([process isEqualToString:@"InCallService"]) { CP26StartCommunicationPreferences(NO); return; }
         if (!phone && !templates) return;
         CP26StartCommunicationPreferences(NO);
         %init(CommunicationBars);

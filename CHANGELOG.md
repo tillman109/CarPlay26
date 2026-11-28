@@ -1,3 +1,7 @@
+# CarPlay26 v0.2.88 — Active call appearance
+
+- Adds a frosted caller card and a shared glass tray behind the CarPlay call controls
+
 # CarPlay26 v0.2.87 — Phone keypad appearance
 
 - Extends the Phone backdrop behind the native number pad, number display and call button in CarPlay

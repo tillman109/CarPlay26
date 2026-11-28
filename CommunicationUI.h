@@ -15,6 +15,7 @@ typedef NS_ENUM(NSInteger, CP26CommunicationApp) { CP26OtherApp, CP26PhoneApp, C
 #ifdef __cplusplus
 extern "C" {
 #endif
+BOOL CP26CallAppearanceEnabled(void);
 void CP26StartCommunicationPreferences(BOOL shell);
 CP26CommunicationApp CP26AppForView(UIView *view);
 CP26CommunicationStyle *CP26StyleForView(UIView *view, BOOL active);
