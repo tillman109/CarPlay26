@@ -1,3 +1,7 @@
+# CarPlay26 v0.2.87 — Phone keypad appearance
+
+- Extends the Phone backdrop behind the native number pad, number display and call button in CarPlay
+
 # CarPlay26 v0.2.86 — Contacts and Messages rows
 
 - Lets ContactsUI size its own cells and applies styling when cells are supplied

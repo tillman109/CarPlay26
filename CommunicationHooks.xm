@@ -33,6 +33,44 @@ static void InstallTemplateHooks(void);
 %end
 %end
 
+@protocol CP26DialerParts <NSObject>
+- (UIView *)dialerView;
+- (UIView *)phonePadView;
+- (UIView *)lcdView;
+@end
+
+static void StyleKeypad(UIViewController *vc) {
+    UIView *root=vc.viewIfLoaded;
+    if (!root || !root.window) return;
+    CP26CommunicationStyle *s=CP26StyleForView(root, CP26AppForView(root)==CP26PhoneApp);
+    if (!s) return;
+    UIView *dialer=[vc respondsToSelector:@selector(dialerView)] ? [(id<CP26DialerParts>)vc dialerView] : root;
+    if (!dialer || ![dialer isDescendantOfView:root]) return;
+    if (!s.field) {
+        s.field=[[CP26CommunicationBackdrop alloc] initWithFrame:root.bounds];
+        s.field.autoresizingMask=UIViewAutoresizingFlexibleWidth|UIViewAutoresizingFlexibleHeight;
+        [root insertSubview:s.field atIndex:0];
+    }
+    if (root.subviews.firstObject!=s.field) [root sendSubviewToBack:s.field];
+    UIView *pad=[dialer respondsToSelector:@selector(phonePadView)] ? [(id<CP26DialerParts>)dialer phonePadView] : nil;
+    UIView *lcd=[dialer respondsToSelector:@selector(lcdView)] ? [(id<CP26DialerParts>)dialer lcdView] : nil;
+    for (UIView *part in @[pad ?: dialer,lcd ?: dialer,dialer]) {
+        if (![part isDescendantOfView:root]) continue;
+        for (UIView *v=part; v; v=v.superview) {
+            [s set:UIColor.clearColor key:@"backgroundColor" on:v];
+            [s set:@NO key:@"opaque" on:v];
+            if (v==root) break;
+        }
+    }
+}
+
+%group PhoneKeypad
+%hook DialerController
+- (void)viewDidLayoutSubviews { %orig; StyleKeypad((UIViewController *)self); }
+- (void)viewDidAppear:(BOOL)animated { %orig; StyleKeypad((UIViewController *)self); }
+%end
+%end
+
 %group PhoneSegments
 %hook UISegmentedControl
 - (void)layoutSubviews { %orig; CP26CommunicationSegments(self); }
@@ -135,6 +173,7 @@ static void InstallTemplateHooks(void) {
         %init(CommunicationTables);
         if (phone) {
             %init(PhoneSegments);
+            if (NSClassFromString(@"DialerController")) { %init(PhoneKeypad); }
             if (NSClassFromString(@"CNStarkContactsListViewController")) { %init(PhoneContacts); }
             if (NSClassFromString(@"CNContactListCollectionViewCell")) { %init(ContactReuse); }
         }

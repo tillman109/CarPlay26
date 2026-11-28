@@ -1,6 +1,6 @@
 Package: com.tillman109.carplay26
 Name: CarPlay26
-Version: 0.2.86
+Version: 0.2.87
 Architecture: iphoneos-arm64e
 Description: CarPlay styling for Phone, Messages, Spotify and an adaptive dock background.
 Maintainer: CarPlay26 Project
